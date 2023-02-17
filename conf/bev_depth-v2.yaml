@@ -1,0 +1,20 @@
+defaults:
+  - bev_depth
+  - override data: mapillary_v4
+  - override model/image_encoder: resnet_fpn
+  - _self_
+data:
+  resize_image: 512
+model:
+  norm_depth_scores: false
+  # depth_parameterization: bev_depth_posenc
+  normalize_scores_by_dim: false
+  normalize_scores_by_num_valid: true
+  normalize_features: false
+  image_encoder:
+    backbone:
+      encoder: resnet101
+  map_encoder:
+    backbone:
+      encoder: vgg19
+    unary_prior: true

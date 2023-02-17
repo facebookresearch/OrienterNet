@@ -1,0 +1,115 @@
+load("@fbcode_macros//build_defs:python_binary.bzl", "python_binary")
+load("@fbcode_macros//build_defs:python_library.bzl", "python_library")
+load("//bento:buck_macros.bzl", "bento_kernel")
+
+python_library(
+    name = "deps",
+    deps = [
+        "fbsource//arvr/python/gaia:gaia",  # query gaia
+        "fbsource//arvr/python/pyvrs:pyvrs",  # read VRS file
+        "fbsource//arvr/third-party/open3d:open3d_python",
+        "fbsource//third-party/pypi/folium:folium",  # map visualization
+        "fbsource//third-party/pypi/fsspec:fsspec",  # remote filesystem
+        "fbsource//third-party/pypi/omegaconf:omegaconf",  # @manual
+        "fbsource//third-party/pypi/tqdm:tqdm",  # progress bar
+        "fbsource//third-party/pypi/trimesh:trimesh",  # trimesh
+        "//caffe2:torch",
+        "//github/third-party/PyTorchLightning/pytorch-lightning:lib",
+        "//livemaps/mapping/pybind:sparse_map",  # read MDC sparse map
+        "//mapillary/data_migration/tools:download_reconstructions_lib",  # Mapillary data API
+        "//mapillary/opensfm/opensfm:opensfm",  # Mapillary OpenSfM
+        "//mapillary/vision/chocolate:chocolate_common_lib",  # Mapillary map visualization
+        "//mapillary/vision/sfm/mapillary_sfm:mapillary_sfm",  # reconstruction
+        "//python/wheel/kornia:kornia",  # kornia
+        "//python/wheel/lxml:lxml",  # xml parser
+        "//python/wheel/pillow:pillow",  # PIL
+        "//python/wheel/pyquaternion:pyquaternion",  # quaternions
+        "//pytorch/vision:torchvision",
+        "//stl/lightning/io:filesystem",
+        "//stl/lightning/loggers:all_loggers",
+        "//stl/lightning/utilities:checkpoint",
+        "//surreal/aria_research_tools:location_lib",
+        "//surreal/deeplearning/vision/utilities:lib",  # checkpoint manager
+        "//surreal/easyaug:easyaug",  # data augmentation
+        "//surreal/third_party/kapture/kapture:kapture",
+        "//tensorboard:db",
+    ],
+    external_deps = [
+        ("h5py", "any"),
+        ("hdf5", None, "hdf5"),
+        ("hdf5", None, "hdf5_hl"),
+        ("Rtree", None, "Rtree-py"),
+        ("numpy", None, "numpy-py"),
+        ("opencv3", None, "opencv3-py"),
+        ("pandas", None, "pandas-py"),
+        ("scikit-learn", None, "scikit-learn-py"),
+        ("scikit-image", None, "scikit-image-py"),
+        "matplotlib",
+        "scipy",
+        "Pillow",
+    ],
+)
+
+python_library(
+    # @autodeps-skip
+    name = "lib",
+    srcs = glob(
+        ["**/*.py"],
+        exclude = [
+            "launcher.py",
+        ],
+    ),
+    resources = glob(["conf/**/*.yaml"]),
+    deps = [
+        ":deps",
+    ],
+)
+
+python_binary(
+    name = "train",
+    srcs = ["launcher.py"],
+    main_module = "surreal.maploc.launcher",
+    par_style = "xar",
+    deps = [
+        "fbsource//third-party/pypi/hydra-core:hydra",
+        ":lib",
+        "//caffe2:torch",
+        "//fair_infra/fbcode_hydra_1.1_plugins/hydra_flow_launcher:hydra_flow_launcher",  # @manual
+    ],
+)
+
+python_binary(
+    name = "eval_kitti",
+    srcs = ["eval_kitti.py"],
+    main_module = "surreal.maploc.eval_kitti",
+    par_style = "xar",
+    deps = [
+        "fbsource//third-party/pypi/numpy:numpy",
+        "fbsource//third-party/pypi/omegaconf:omegaconf",
+        "fbsource//third-party/pypi/tqdm:tqdm",
+        ":lib",
+        "//caffe2:torch",
+        "//github/third-party/PyTorchLightning/metrics:lib",
+        "//github/third-party/PyTorchLightning/pytorch-lightning:lib",
+    ],
+)
+
+python_binary(
+    name = "mapillary_ingestion",
+    srcs = ["mapillary/run.py"],
+    main_module = "surreal.maploc.mapillary.run",
+    par_style = "xar",
+    deps = [
+        ":lib",
+        "//libfb/py/asyncio:await_utils",
+        "//manifold/clients/python:manifold_client",
+        "//stl/lightning/io:filesystem",
+    ],
+)
+
+bento_kernel(
+    name = "maploc",
+    deps = [
+        ":deps",
+    ],
+)

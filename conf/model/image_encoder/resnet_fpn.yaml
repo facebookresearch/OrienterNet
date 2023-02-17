@@ -1,0 +1,7 @@
+name: feature_extractor_v2
+backbone:
+  encoder: resnet50
+  pretrained: true
+  output_dim: ${...latent_dim}
+  num_downsample: null
+  remove_stride_from_first_conv: false

@@ -1,0 +1,18 @@
+defaults:
+  - bev
+  - _self_
+data:
+  loading:
+    train:
+      batch_size: 6
+model:
+  latent_dim: 128
+  num_rotations: 64
+  polar_projection:
+    name: bev_transformer
+    z_max: ${..z_max}
+    pixel_per_meter: ${..pixel_per_meter}
+    dim: ${..latent_dim}
+    num_blocks_encoder: 2
+    num_blocks_decoder: 2
+    norm_location: pre

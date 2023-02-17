@@ -1,0 +1,26 @@
+defaults:
+  - data: mapillary_v4
+  - model/image_encoder: global
+  - training
+  - override hydra/launcher: "flow"
+  - _self_
+data:
+  resize_image: 512
+model:
+  name: localizer_basic
+  latent_dim: 256
+  image_encoder:
+    backbone:
+      encoder: resnet101
+  map_encoder:
+    embedding_dim: 16
+    num_classes: ${data.num_classes}
+    backbone:
+      encoder: vgg19
+      pretrained: false
+      output_dim: ${...latent_dim}
+      output_scales: [0]
+      num_downsample: 3
+      decoder: [256, 128, 128]
+      padding: replicate
+    unary_prior: false

@@ -1,0 +1,41 @@
+name: mapillary
+dump_dir: "manifold://psarlin/tree/maploc/data/mapillary_v2"
+scenes:
+  - sanfrancisco_soma
+  - sanfrancisco_hayes
+  - amsterdam
+  - berlin
+  - lemans
+  - montrouge
+  - toulouse
+  - nantes
+  - vilnius
+  - avignon
+  - helsinki
+  - milan
+split: splits_mly12_100each.json
+tiles_filename: tiles_v2.pkl
+loading:
+  train:
+    batch_size: 9
+    num_workers: ${.batch_size}
+  val:
+    batch_size: ${..train.batch_size}
+    num_workers: ${.batch_size}
+filter_by_ground_angle: 75
+# map data
+num_classes:
+  areas: 7
+  ways: 10
+  nodes: 33
+pixel_per_meter: 2
+crop_size_meters: 64
+max_init_error: 32
+# preprocessing
+resize_image: 256
+pad_to_square: true
+rectify_pitch: true
+augmentation:
+  rot90: true
+  flip: true
+  image: {apply: true}

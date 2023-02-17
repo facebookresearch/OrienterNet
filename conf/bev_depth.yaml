@@ -1,0 +1,37 @@
+defaults:
+  - data: mapillary
+  - model/image_encoder: vgg_unet
+  - training
+  - override hydra/launcher: "flow"
+  - _self_
+data:
+  loading:
+    train:
+      batch_size: 9
+model:
+  name: localizer_bev_depth
+  latent_dim: 128
+  matching_dim: 8
+  z_max: 32
+  x_max: 32
+  pixel_per_meter: ${data.pixel_per_meter}
+  num_scale_bins: 33
+  num_rotations: 64
+  normalize_features: true
+  map_encoder:
+    embedding_dim: 16
+    output_dim: ${..matching_dim}
+    num_classes: ${data.num_classes}
+    backbone:
+      encoder: vgg13
+      pretrained: false
+      output_scales: [0]
+      num_downsample: 3
+      decoder: [128, 64, 64]
+      padding: replicate
+    unary_prior: false
+  bev_net:
+    num_blocks: 4
+    latent_dim: ${..latent_dim}
+    output_dim: ${..matching_dim}
+    confidence: true

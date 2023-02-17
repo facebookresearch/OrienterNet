@@ -1,0 +1,12 @@
+defaults:
+  - bev_depth
+  - _self_
+model:
+  do_joint_retrieval: true
+  retrieval_dim: 128
+  normalize_scores_by_dim: false
+  normalize_scores_by_num_valid: true
+  normalize_features: false
+  map_encoder:
+    backbone:
+      decoder: [128, 128, 128]

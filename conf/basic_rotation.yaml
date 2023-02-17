@@ -1,0 +1,26 @@
+defaults:
+  - data: mapillary
+  - model/image_encoder: global
+  - training
+  - override hydra/launcher: "flow"
+  - _self_
+data:
+  train:
+    batch_size: 9
+model:
+  name: localizer_basic_rotation
+  latent_dim: 64
+  pixel_per_meter: ${data.pixel_per_meter}
+  num_rotations: 32
+  map_encoder:
+    embedding_dim: 16
+    num_classes: ${data.num_classes}
+    backbone:
+      encoder: vgg13
+      pretrained: false
+      output_dim: ${...latent_dim}
+      output_scales: [0]
+      num_downsample: 3
+      decoder: [128, 64, 64]
+      padding: replicate
+    unary_prior: false
