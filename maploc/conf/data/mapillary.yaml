@@ -1,0 +1,40 @@
+name: mapillary
+scenes:
+  - sanfrancisco_soma
+  - sanfrancisco_hayes
+  - amsterdam
+  - berlin
+  - lemans
+  - montrouge
+  - toulouse
+  - nantes
+  - vilnius
+  - avignon
+  - helsinki
+  - milan
+  - paris
+split: splits_MGL_13loc.json
+loading:
+  train:
+    batch_size: 12
+    num_workers: ${.batch_size}
+  val:
+    batch_size: ${..train.batch_size}
+    num_workers: ${.batch_size}
+# map data
+num_classes:
+  areas: 7
+  ways: 10
+  nodes: 33
+pixel_per_meter: 2
+crop_size_meters: 64
+max_init_error: 48
+add_map_mask: true
+# preprocessing
+resize_image: 512
+pad_to_square: true
+rectify_pitch: true
+augmentation:
+  rot90: true
+  flip: true
+  image: {apply: true}

@@ -1,0 +1,9 @@
+name: feature_extractor
+backbone:
+  encoder: resnet18
+  pretrained: true
+  output_dim: ${...latent_dim}
+  output_scales: [5]
+  num_downsample: 5
+  decoder: null
+pooling: mean

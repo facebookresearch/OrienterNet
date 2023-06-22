@@ -1,0 +1,17 @@
+defaults:
+  - orienternet
+  - _self_
+data:
+  loading:
+    train:
+      batch_size: 6
+  random: false
+  split: null
+model:
+  freeze_batch_normalization: true
+training:
+  trainer:
+    overfit_batches: 1
+    val_check_interval: 1
+    log_every_n_steps: 1
+    limit_val_batches: 1

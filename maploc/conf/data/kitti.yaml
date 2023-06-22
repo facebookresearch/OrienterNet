@@ -1,0 +1,29 @@
+name: kitti
+loading:
+  train:
+    batch_size: 9
+    num_workers: ${.batch_size}
+  val:
+    batch_size: ${..train.batch_size}
+    num_workers: ${.batch_size}
+# make sure train and val locations are at least 5m apart
+selection_subset_val: furthest
+max_num_val: 500
+drop_train_too_close_to_val: 5.0
+# map data
+num_classes:
+  areas: 7
+  ways: 10
+  nodes: 33
+pixel_per_meter: 2
+crop_size_meters: 64
+max_init_error: 32
+# preprocessing
+target_focal_length: 256
+resize_image: [448, 160]  # multiple of 32 at f=256px
+# pad_to_multiple: 32
+rectify_pitch: true
+augmentation:
+  rot90: true
+  flip: true
+  image: {apply: true}

@@ -1,0 +1,22 @@
+experiment:
+  name: ???
+  gpus: 3
+  seed: 0
+training:
+  lr: 1e-4
+  lr_scheduler: null
+  finetune_from_checkpoint: null
+  trainer:
+    val_check_interval: 5000
+    log_every_n_steps: 100
+    limit_val_batches: 1000
+    max_steps: 500000
+    devices: ${experiment.gpus}
+  checkpointing:
+    monitor: "loss/total/val"
+    save_top_k: 5
+    mode: "min"
+hydra:
+  job:
+    name: ${experiment.name}
+    chdir: false

@@ -1,0 +1,8 @@
+name: feature_extractor
+backbone:
+  encoder: vgg16
+  pretrained: true
+  output_dim: ${...latent_dim}
+  output_scales: [0]
+  num_downsample: 4
+  decoder: [512, 256, 256, 128]
