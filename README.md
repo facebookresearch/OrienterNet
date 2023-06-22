@@ -22,7 +22,7 @@
     <a href="https://scholar.google.com/citations?user=AGoNHcsAAAAJ&hl=en">Vasileios&nbsp;Balntas</a>
   </p>
   <h2 align="center">CVPR 2023</h2>
-	<h3 align="center"><a href="https://arxiv.org/pdf/2304.02009.pdf">Paper</a> | <a href="https://psarlin.com/orienternet">Project Page</a> | <a href="https://youtu.be/wglW8jnupSs">Video</a></h3>
+	<h3 align="center"><a href="https://colab.research.google.com/drive/1zH_2mzdB18BnJVq48ZvJhMorcRjrWAXI?usp=sharing">Demo</a> | <a href="https://arxiv.org/pdf/2304.02009.pdf">Paper</a> | <a href="https://psarlin.com/orienternet">Project Page</a> | <a href="https://youtu.be/wglW8jnupSs">Video</a></h3>
   <div align="center"></div>
 </p>
 <p align="center">
