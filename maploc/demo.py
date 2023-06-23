@@ -96,9 +96,9 @@ def read_input_image(
             raise ValueError("geocoding unavailable, install geopy.")
         location = geolocator.geocode(prior_address)
         if location is None:
-            logger.info("Could not find any location for %s.", prior_address)
+            logger.info("Could not find any location for address '%s.'", prior_address)
         else:
-            logger.info("Using prior address: %s", location.address)
+            logger.info("Using prior address '%s'", location.address)
             latlon = (location.latitude, location.longitude)
     if latlon is None:
         geo = exif.extract_geo()
@@ -107,9 +107,11 @@ def read_input_image(
             latlon = (geo["latitude"], geo["longitude"], alt)
             logger.info("Using prior location from EXIF.")
         else:
-            logger.info("Could not find any prior location in EXIF.")
+            logger.info("Could not find any prior location in the image EXIF metadata.")
     if latlon is None:
-        raise ValueError("Need prior latlon")
+        raise ValueError(
+            "No location prior given: maybe provide the name of a street, building or neighborhood?"
+        )
     latlon = np.array(latlon)
 
     proj = Projection(*latlon)
