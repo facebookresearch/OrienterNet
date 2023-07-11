@@ -208,4 +208,4 @@ class Demo:
 
         prob = lp_xyr.exp().cpu()
         neural_map = pred["map"]["map_features"][0].squeeze(0).cpu()
-        return xyr[:2], xyr[1], prob, neural_map, data["image"]
+        return xyr[:2], xyr[2], prob, neural_map, data["image"]
