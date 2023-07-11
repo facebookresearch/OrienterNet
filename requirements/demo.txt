@@ -17,3 +17,4 @@ scikit-learn
 geopy
 exifread
 gradio_client
+urllib3>=2

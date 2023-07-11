@@ -2,41 +2,34 @@
 
 import json
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
+from http.client import responses
 
 import urllib3
 
 from .. import logger
 from ..utils.geo import BoundaryBox
 
+OSM_URL = "https://api.openstreetmap.org/api/0.6/map.json"
+
 
 def get_osm(
     boundary_box: BoundaryBox,
     cache_path: Optional[Path] = None,
     overwrite: bool = False,
-) -> str:
+) -> Dict[str, Any]:
     if not overwrite and cache_path is not None and cache_path.is_file():
-        with cache_path.open() as fp:
-            return json.load(fp)
+        return json.loads(cache_path.read_text())
 
     (bottom, left), (top, right) = boundary_box.min_, boundary_box.max_
-    content: bytes = get_web_data(
-        "https://api.openstreetmap.org/api/0.6/map.json",
-        {"bbox": f"{left},{bottom},{right},{top}"},
-    )
+    query = {"bbox": f"{left},{bottom},{right},{top}"}
 
-    content_str = content.decode("utf-8")
-    if content_str.startswith("You requested too many nodes"):
-        raise ValueError(content_str)
+    logger.info("Calling the OpenStreetMap API...")
+    result = urllib3.request("GET", OSM_URL, fields=query, timeout=10)
+    if result.status != 200:
+        error = result.info()['error']
+        raise ValueError(f"{result.status} {responses[result.status]}: {error}")
 
     if cache_path is not None:
-        with cache_path.open("bw+") as fp:
-            fp.write(content)
-    return json.loads(content_str)
-
-
-def get_web_data(address: str, parameters: Dict[str, str]) -> bytes:
-    logger.info("Getting %s...", address)
-    http = urllib3.PoolManager()
-    result = http.request("GET", address, parameters, timeout=10)
-    return result.data
+        cache_path.write_bytes(result.data)
+    return result.json()

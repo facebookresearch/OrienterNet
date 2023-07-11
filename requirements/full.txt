@@ -18,3 +18,4 @@ git+https://github.com/mapillary/OpenSfM
 httpx
 aiolimiter
 scikit-learn
+urllib3>=2
