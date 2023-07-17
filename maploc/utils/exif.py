@@ -87,7 +87,7 @@ def unescape_string(s) -> str:
 
 class EXIF:
     def __init__(
-        self, fileobj, image_size_loader, use_exif_size=True, name=None
+        self, fileobj, image_size_loader=None, use_exif_size=True, name=None
     ) -> None:
         self.image_size_loader = image_size_loader
         self.use_exif_size = use_exif_size
@@ -97,7 +97,9 @@ class EXIF:
         self.fileobj_name = self.fileobj.name if name is None else name
 
     def extract_image_size(self) -> Tuple[int, int]:
-        if (
+        if self.image_size_loader is not None:
+            height, width = self.image_size_loader()
+        elif (
             self.use_exif_size
             and "EXIF ExifImageWidth" in self.tags
             and "EXIF ExifImageLength" in self.tags
@@ -116,7 +118,7 @@ class EXIF:
                 int(self.tags["Image ImageLength"].values[0]),
             )
         else:
-            height, width = self.image_size_loader()
+            raise ValueError("Missing image size in EXIF tags or loader.")
         return width, height
 
     def _decode_make_model(self, value) -> str:

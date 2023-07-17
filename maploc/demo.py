@@ -70,22 +70,8 @@ def read_input_image(
     tile_size_meters: int = 64,
 ):
     image = read_image(image_path)
-
-    roll_pitch = None
-    if calibrator is not None:
-        roll_pitch, fov = image_calibration(image_path)
-    else:
-        logger.info("Could not call PerspectiveFields, maybe install gradio_client?")
-    if roll_pitch is not None:
-        logger.info("Using (roll, pitch) %s.", roll_pitch)
-
     with open(image_path, "rb") as fid:
         exif = EXIF(fid, lambda: image.shape[:2])
-    camera = camera_from_exif(exif, fov)
-    if camera is None:
-        raise ValueError(
-            "No camera intrinsics found in the EXIF, provide an FoV guess."
-        )
 
     latlon = None
     if prior_latlon is not None:
@@ -110,9 +96,24 @@ def read_input_image(
             logger.info("Could not find any prior location in the image EXIF metadata.")
     if latlon is None:
         raise ValueError(
-            "No location prior given: maybe provide the name of a street, building or neighborhood?"
+            "No location prior given or found in the image EXIF metadata: "
+            "maybe provide the name of a street, building or neighborhood?"
         )
     latlon = np.array(latlon)
+
+    roll_pitch = None
+    if calibrator is not None:
+        roll_pitch, fov = image_calibration(image_path)
+    else:
+        logger.info("Could not call PerspectiveFields, maybe install gradio_client?")
+    if roll_pitch is not None:
+        logger.info("Using (roll, pitch) %s.", roll_pitch)
+
+    camera = camera_from_exif(exif, fov)
+    if camera is None:
+        raise ValueError(
+            "No camera intrinsics found in the EXIF, provide an FoV guess."
+        )
 
     proj = Projection(*latlon)
     center = proj.project(latlon)
