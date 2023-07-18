@@ -64,7 +64,7 @@ def run(
     if isinstance(cfg, dict):
         cfg = OmegaConf.create(cfg)
     default = default_cfg_sequential if sequential else default_cfg_single
-    default = OmegaConf.merge(default, split_overrides[split])
+    default = OmegaConf.merge(default, dict(data=split_overrides[split]))
     cfg = OmegaConf.merge(default, cfg)
     dataset = MapillaryDataModule(cfg.get("data", {}))
 
