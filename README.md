@@ -113,16 +113,16 @@ python -m maploc.evaluation.mapillary [...] --output_dir ./viz_MGL/ --num 100
 To run the evaluation in sequential mode:
 
 ```bash
-python -m maploc.evaluation.mapillary --experiment OrienterNet_MGL --sequential
+python -m maploc.evaluation.mapillary --experiment OrienterNet_MGL --sequential model.num_rotations=256
 ```
 The results should be close to the following:
 ```
 Recall xy_seq_error: [29.73, 73.25, 91.17] at (1, 3, 5) m/°
 Recall yaw_seq_error: [46.55, 88.3, 96.45] at (1, 3, 5) m/°
 ```
-The sequential evaluation uses 10 frames by default. To increase this number:
+The sequential evaluation uses 10 frames by default. To increase this number, add:
 ```bash
-python -m maploc.evaluation.mapillary [...] --sequential chunking.max_length=20
+python -m maploc.evaluation.mapillary [...] chunking.max_length=20
 ```
 
 
@@ -142,7 +142,7 @@ python -m maploc.data.kitti.prepare
 2. Run the evaluation with the model trained on MGL:
 
 ```bash
-python -m maploc.evaluation.kitti --experiment OrienterNet_MGL
+python -m maploc.evaluation.kitti --experiment OrienterNet_MGL model.num_rotations=256
 ```
 
 You should expect the following results:
@@ -155,9 +155,18 @@ Recall yaw_max_error: [29.22, 68.2, 84.49] at (1, 3, 5) m/°
 You can similarly export some visual examples:
 
 ```bash
-python -m maploc.evaluation.kitti [...] --output_dir ./viz_KITTI/ --num 100 
+python -m maploc.evaluation.kitti [...] --output_dir ./viz_KITTI/ --num 100
 ```
-To run in sequential mode, similarly add the `--sequential` flag.
+
+To run in sequential mode:
+```bash
+python -m maploc.evaluation.kitti --experiment OrienterNet_MGL --sequential model.num_rotations=256
+```
+with results:
+```
+Recall directional_seq_error: [[81.94, 97.35, 98.67], [52.57, 95.6, 97.35]] at (1, 3, 5) m/°
+Recall yaw_seq_error: [82.7, 98.63, 99.06] at (1, 3, 5) m/°
+```
 
 </details>
 

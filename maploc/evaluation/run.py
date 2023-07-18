@@ -109,7 +109,7 @@ def evaluate_sequential(
     progress: bool = True,
     num_rotations: int = 512,
     mask_index: Optional[Tuple[int]] = None,
-    has_gps: bool = True,
+    has_gps: bool = False,
 ):
     chunk_keys = list(chunk2idx)
     if shuffle:
