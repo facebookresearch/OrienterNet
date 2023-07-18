@@ -101,22 +101,30 @@ Recall yaw_max_error: [20.95, 54.96, 70.17] at (1, 3, 5) m/°
 This requires a GPU with 11GB of memory. If you run into OOM issues, consider reducing the number of rotations (the default is 256):
 
 ```bash
-python -m maploc.evaluation.mapillary --experiment OrienterNet_MGL \
-    model.num_rotations=128
+python -m maploc.evaluation.mapillary [...] model.num_rotations=128
 ```
 
 To export visualizations for the first 100 examples:
 
 ```bash
-python -m maploc.evaluation.mapillary --experiment OrienterNet_MGL \
-    --output_dir ./viz_MGL/ --num 100 
+python -m maploc.evaluation.mapillary [...] --output_dir ./viz_MGL/ --num 100 
 ```
 
-To run the evaluation in sequential mode (by default with 10 frames):
+To run the evaluation in sequential mode:
 
 ```bash
 python -m maploc.evaluation.mapillary --experiment OrienterNet_MGL --sequential
 ```
+The results should be close to the following:
+```
+Recall xy_seq_error: [29.73, 73.25, 91.17] at (1, 3, 5) m/°
+Recall yaw_seq_error: [46.55, 88.3, 96.45] at (1, 3, 5) m/°
+```
+The sequential evaluation uses 10 frames by default. To increase this number:
+```bash
+python -m maploc.evaluation.mapillary [...] --sequential chunking.max_length=20
+```
+
 
 </details>
 
@@ -147,9 +155,9 @@ Recall yaw_max_error: [29.22, 68.2, 84.49] at (1, 3, 5) m/°
 You can similarly export some visual examples:
 
 ```bash
-python -m maploc.evaluation.kitti --experiment OrienterNet_MGL \
-    --output_dir ./viz_KITTI/ --num 100 
+python -m maploc.evaluation.kitti [...] --output_dir ./viz_KITTI/ --num 100 
 ```
+To run in sequential mode, similarly add the `--sequential` flag.
 
 </details>
 
@@ -206,7 +214,9 @@ We provide several visualization notebooks:
 <details>
 <summary>[Click to expand]</summary>
 
-To make sure that the results are consistent over time, we used OSM data downloaded from [Geofabrik](https://download.geofabrik.de/) in November 2021. By default, the dataset scripts `maploc.data.[mapillary,kitti].prepare` download pre-generated raster tiles. If you wish to use different OSM classes, you can pass `--generate_tiles`, which will download and use our prepared raw `.osm` XML files. You may alternatively download more recent files.
+To make sure that the results are consistent over time, we used OSM data downloaded from [Geofabrik](https://download.geofabrik.de/) in November 2021. By default, the dataset scripts `maploc.data.[mapillary,kitti].prepare` download pre-generated raster tiles. If you wish to use different OSM classes, you can pass `--generate_tiles`, which will download and use our prepared raw `.osm` XML files.
+
+You may alternatively download more recent files from [Geofabrik](https://download.geofabrik.de/). Download either compressed XML files as `.osm.bz2` or binary files `.osm.pbf`, which need to be converted to XML files `.osm`, for example using Osmium: ` osmium cat xx.osm.pbf -o xx.osm`.
 
 </details>
 
