@@ -132,7 +132,7 @@ location_to_params = {
 }
 
 
-cfg = OmegaConf.create(
+default_cfg = OmegaConf.create(
     {
         "max_image_size": 512,
         "do_legacy_pano_offset": True,
@@ -277,6 +277,7 @@ def process_location(
     data_dir: Path,
     split_path: Path,
     token: str,
+    cfg: DictConfig,
     generate_tiles: bool = False,
 ):
     params = location_to_params[location]
@@ -393,10 +394,12 @@ if __name__ == "__main__":
         "--data_dir", type=Path, default=MapillaryDataModule.default_cfg["data_dir"]
     )
     parser.add_argument("--generate_tiles", action="store_true")
+    parser.add_argument("dotlist", nargs="*")
     args = parser.parse_args()
 
     args.data_dir.mkdir(exist_ok=True, parents=True)
     shutil.copy(Path(__file__).parent / args.split_filename, args.data_dir)
+    cfg_ = OmegaConf.merge(default_cfg, OmegaConf.from_cli(args.dotlist))
 
     for location in args.locations:
         logger.info("Starting processing for location %s.", location)
@@ -405,5 +408,6 @@ if __name__ == "__main__":
             args.data_dir,
             args.data_dir / args.split_filename,
             args.token,
+            cfg_,
             args.generate_tiles,
         )
