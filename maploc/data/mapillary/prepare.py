@@ -362,6 +362,7 @@ def process_location(
     else:
         logger.info("Downloading pre-generated map tiles.")
         download_file(DATA_URL + f"/tiles/{location}.pkl", tiles_path)
+        tile_manager = TileManager.load(tiles_path)
 
     # Visualize the data split
     plotter = GeoPlotter()
@@ -370,7 +371,9 @@ def process_location(
     plotter.points(views_latlon[~is_val], "red", view_ids[~is_val], "train")
     plotter.points(views_latlon[is_val], "green", view_ids[is_val], "val")
     plotter.bbox(bbox, "blue", "query bounding box")
-    plotter.bbox(projection.unproject(bbox_tiling), "black", "tiling bounding box")
+    plotter.bbox(
+        projection.unproject(tile_manager.bbox), "black", "tiling bounding box"
+    )
     geo_viz_path = loc_dir / f"split_{location}.html"
     plotter.fig.write_html(geo_viz_path)
     logger.info("Wrote split visualization to %s.", geo_viz_path)
