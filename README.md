@@ -23,7 +23,7 @@
   </p>
   <h2 align="center">CVPR 2023</h2>
   <h3 align="center">
-    <a href="https://skydes-orienternet.hf.space">Web demo</a>
+    <a href="https://sarlinpe-orienternet.hf.space">Web demo</a>
     | <a href="https://colab.research.google.com/drive/1zH_2mzdB18BnJVq48ZvJhMorcRjrWAXI?usp=sharing">Colab</a>
     | <a href="https://arxiv.org/pdf/2304.02009.pdf">Paper</a> 
     | <a href="https://psarlin.com/orienternet">Project Page</a>
@@ -56,15 +56,15 @@ To run the evaluation and training, install the full requirements:
 python -m pip install -r requirements/full.txt
 ```
 
-## Demo ➡️ [![hf](https://huggingface.co/datasets/huggingface/badges/raw/main/open-in-hf-spaces-md.svg)](https://skydes-orienternet.hf.space) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1zH_2mzdB18BnJVq48ZvJhMorcRjrWAXI?usp=sharing)
+## Demo ➡️ [![hf](https://huggingface.co/datasets/huggingface/badges/raw/main/open-in-hf-spaces-md.svg)](https://sarlinpe-orienternet.hf.space) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1zH_2mzdB18BnJVq48ZvJhMorcRjrWAXI?usp=sharing)
 
 Try our minimal demo - take a picture with your phone in any city and find its exact location in a few seconds!
-- [Web demo with Gradio and Huggingface Spaces](https://skydes-orienternet.hf.space)
+- [Web demo with Gradio and Huggingface Spaces](https://sarlinpe-orienternet.hf.space)
 - [Cloud demo with Google Colab](https://colab.research.google.com/drive/1zH_2mzdB18BnJVq48ZvJhMorcRjrWAXI?usp=sharing)
 - Local demo with Jupyter nobook [`demo.ipynb`](./demo.ipynb)
 
 <p align="center">
-    <a href="https://huggingface.co/spaces/skydes/OrienterNet"><img src="assets/demo.jpg" alt="demo" width="60%"></a>
+    <a href="https://huggingface.co/spaces/sarlinpe/OrienterNet"><img src="assets/demo.jpg" alt="demo" width="60%"></a>
     <br>
     <em>OrienterNet positions any image within a large area - try it with your own images!</em>
 </p>
