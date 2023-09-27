@@ -27,7 +27,7 @@ def get_osm(
     logger.info("Calling the OpenStreetMap API...")
     result = urllib3.request("GET", OSM_URL, fields=query, timeout=10)
     if result.status != 200:
-        error = result.info()['error']
+        error = result.info()["error"]
         raise ValueError(f"{result.status} {responses[result.status]}: {error}")
 
     if cache_path is not None:
