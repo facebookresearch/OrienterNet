@@ -89,7 +89,8 @@ class MapillaryDownloader:
             info = json.loads(path.read_text())
         else:
             info = await self.get_image_info(image_id)
-            path.write_text(json.dumps(info))
+            if info is not None:
+                path.write_text(json.dumps(info))
         return info
 
     async def download_image_pixels_cached(self, url: str, path: Path):
