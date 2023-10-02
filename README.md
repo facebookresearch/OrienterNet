@@ -187,7 +187,7 @@ python -m maploc.train experiment.name=OrienterNet_MGL_reproduce
 Feel free to use any other experiment name. Configurations are managed by [Hydra](https://hydra.cc/) and [OmegaConf](https://omegaconf.readthedocs.io) so any entry can be overridden from the command line. You may thus reduce the number of GPUs and the batch size via:
 
 ```bash
-python -m maploc.train experiment.name=OrienterNet_MGL_reproduce
+python -m maploc.train experiment.name=OrienterNet_MGL_reproduce \
   experiment.gpus=1 data.loading.train.batch_size=4
 ```
 
