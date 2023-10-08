@@ -89,7 +89,8 @@ class MapillaryDownloader:
             info = json.loads(path.read_text())
         else:
             info = await self.get_image_info(image_id)
-            path.write_text(json.dumps(info))
+            if info is not None:
+                path.write_text(json.dumps(info))
         return info
 
     async def download_image_pixels_cached(self, url: str, path: Path):
@@ -102,7 +103,10 @@ class MapillaryDownloader:
 async def fetch_images_in_sequence(i, downloader):
     async with semaphore:
         info = await downloader.get_sequence_info(i)
-    image_ids = [int(d["id"]) for d in info["data"]]
+    if info is None:
+        image_ids = None
+    else:
+        image_ids = [int(d["id"]) for d in info["data"]]
     return i, image_ids
 
 
@@ -111,7 +115,8 @@ async def fetch_images_in_sequences(sequence_ids, downloader):
     tasks = [fetch_images_in_sequence(i, downloader) for i in sequence_ids]
     for task in tqdm.asyncio.tqdm.as_completed(tasks):
         i, image_ids = await task
-        seq_to_images_ids[i] = image_ids
+        if image_ids is not None:
+            seq_to_images_ids[i] = image_ids
     return seq_to_images_ids
 
 

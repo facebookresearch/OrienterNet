@@ -252,7 +252,7 @@ def process_sequence(
         shots,
         disable=True,
     )
-    shots_out = [(i, s) for i, ss in enumerate(shots_out) for s in ss if ss is not None]
+    shots_out = [(i, s) for i, ss in enumerate(shots_out) if ss is not None for s in ss]
 
     dump = {}
     for index, shot in shots_out:
