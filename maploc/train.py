@@ -120,7 +120,7 @@ def train(cfg: DictConfig, job_id: Optional[int] = None):
     if init_checkpoint_path is not None:
         logger.info("Initializing the model from checkpoint %s.", init_checkpoint_path)
         model = GenericModule.load_from_checkpoint(
-            init_checkpoint_path, strict=True, find_best=False, cfg=cfg
+            Path(init_checkpoint_path), strict=True, find_best=False, cfg=cfg
         )
     else:
         model = GenericModule(cfg)
