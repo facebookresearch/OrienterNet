@@ -66,7 +66,7 @@ class MapillaryDownloader:
         )
         self.limiter = AsyncLimiter(self.max_requests_per_minute // 2, time_period=60)
 
-    @retry(times=5, exceptions=httpx.RemoteProtocolError)
+    @retry(times=5, exceptions=(httpx.RemoteProtocolError, httpx.ReadError))
     async def call_api(self, url: str):
         async with self.limiter:
             r = await self.client.get(url)
