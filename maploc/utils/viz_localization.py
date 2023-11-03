@@ -99,6 +99,7 @@ def copy_image(im, ax):
     prop.pop("window_extent")
     prop.pop("figure")
     prop.pop("transform")
+    prop.pop("shape", None)
     return ax.imshow(im.get_array(), **prop)
 
 
