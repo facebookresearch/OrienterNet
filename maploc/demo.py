@@ -170,14 +170,14 @@ class Demo:
                 pitch=-pitch,
             )
         image, _, camera, *maybe_valid = resize_image(
-            image, size.numpy(), camera=camera, valid=valid
+            image, size.tolist(), camera=camera, valid=valid
         )
         valid = None if valid is None else maybe_valid
 
         max_stride = max(self.model.image_encoder.layer_strides)
-        size = (np.ceil((size / max_stride)) * max_stride).int()
+        size = (torch.ceil(size / max_stride) * max_stride).int()
         image, valid, camera = pad_image(
-            image, size.numpy(), camera, crop_and_center=True
+            image, size.tolist(), camera, crop_and_center=True
         )
 
         return dict(

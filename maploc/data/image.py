@@ -69,11 +69,11 @@ def resize_image(
     if fn is not None:
         assert isinstance(size, int)
         scale = size / fn(h, w)
-        h_new, w_new = int(round(h * scale)), int(round(w * scale))
+        h_new, w_new = (int(round(x * scale)) for x in (h, w))
         scale = (scale, scale)
     else:
         if isinstance(size, (collections.abc.Sequence, np.ndarray)):
-            w_new, h_new = size
+            w_new, h_new = (int(x) for x in size)
         elif isinstance(size, int):
             w_new = h_new = size
         else:
