@@ -97,7 +97,7 @@ def download(data_dir: Path):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--data_dir", type=Path, default=Path(KittiDataModule.default_cfg["local_dir"])
+        "--data_dir", type=Path, default=Path(KittiDataModule.default_cfg["data_dir"])
     )
     parser.add_argument("--pixel_per_meter", type=int, default=2)
     parser.add_argument("--generate_tiles", action="store_true")
