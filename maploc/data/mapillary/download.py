@@ -20,6 +20,18 @@ semaphore = asyncio.Semaphore(100)  # number of parallel threads.
 image_filename = "{image_id}.jpg"
 info_filename = "{image_id}.json"
 
+def retry(times, exceptions):
+    def decorator(func):
+        async def wrapper(*args, **kwargs):
+            attempt = 0
+            while attempt < times:
+                try:
+                    return await func(*args, **kwargs)
+                except exceptions:
+                    attempt += 1
+            return await func(*args, **kwargs)
+        return wrapper
+    return decorator
 
 class MapillaryDownloader:
     image_fields = (
@@ -50,10 +62,11 @@ class MapillaryDownloader:
     def __init__(self, token: str):
         self.token = token
         self.client = httpx.AsyncClient(
-            transport=httpx.AsyncHTTPTransport(retries=20), timeout=20.0
+            transport=httpx.AsyncHTTPTransport(retries=20), timeout=120.0
         )
         self.limiter = AsyncLimiter(self.max_requests_per_minute // 2, time_period=60)
 
+    @retry(times=5, exceptions=(httpx.RemoteProtocolError, httpx.ReadError))
     async def call_api(self, url: str):
         async with self.limiter:
             r = await self.client.get(url)
