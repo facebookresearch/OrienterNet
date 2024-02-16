@@ -82,7 +82,6 @@ def download(data_dir: Path):
             shutil.rmtree(seq_dir / f"image_0{image_index}")
         shutil.rmtree(seq_dir / "velodyne_points")
         Path(zip_path).unlink()
-        break
 
     for date in tqdm(dates):
         url = (
