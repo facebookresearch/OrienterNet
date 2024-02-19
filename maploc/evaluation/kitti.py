@@ -4,17 +4,16 @@ import argparse
 from pathlib import Path
 from typing import Optional, Tuple
 
-from omegaconf import OmegaConf, DictConfig
+from omegaconf import DictConfig, OmegaConf
 
 from .. import logger
 from ..data import KittiDataModule
 from .run import evaluate
 
-
 default_cfg_single = OmegaConf.create({})
 # For the sequential evaluation, we need to center the map around the GT location,
-# since random offsets would accumulate and leave only the GT location with a valid mask.
-# This should not have much impact on the results.
+# since random offsets would accumulate and leave only the GT location with
+# a valid mask. This should not have much impact on the results.
 default_cfg_sequential = OmegaConf.create(
     {
         "data": {

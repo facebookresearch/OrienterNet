@@ -1,11 +1,11 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 
-from typing import Callable, Optional, Union, Sequence
+import collections
+from typing import Callable, Optional, Sequence, Union
 
 import numpy as np
 import torch
 import torchvision.transforms.functional as tvf
-import collections
 from scipy.spatial.transform import Rotation
 
 from ..utils.geometry import from_homogeneous, to_homogeneous

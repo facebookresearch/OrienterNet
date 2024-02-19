@@ -1,10 +1,10 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 
 import json
-from collections import defaultdict
 import os
 import shutil
 import tarfile
+from collections import defaultdict
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -14,7 +14,7 @@ import torch
 import torch.utils.data as torchdata
 from omegaconf import DictConfig, OmegaConf
 
-from ... import logger, DATASETS_PATH
+from ... import DATASETS_PATH, logger
 from ...osm.tiling import TileManager
 from ..dataset import MapLocDataset
 from ..sequential import chunk_sequence
@@ -115,7 +115,8 @@ class MapillaryDataModule(pl.LightningDataModule):
             if self.cfg.num_classes:  # check consistency
                 if set(groups.keys()) != set(self.cfg.num_classes.keys()):
                     raise ValueError(
-                        f"Inconsistent groups: {groups.keys()} {self.cfg.num_classes.keys()}"
+                        "Inconsistent groups: "
+                        f"{groups.keys()} {self.cfg.num_classes.keys()}"
                     )
                 for k in groups:
                     if len(groups[k]) != self.cfg.num_classes[k]:
@@ -125,8 +126,8 @@ class MapillaryDataModule(pl.LightningDataModule):
             ppm = self.tile_managers[scene].ppm
             if ppm != self.cfg.pixel_per_meter:
                 raise ValueError(
-                    "The tile manager and the config/model have different ground resolutions: "
-                    f"{ppm} vs {self.cfg.pixel_per_meter}"
+                    "The tile manager and the config/model have different ground "
+                    f"resolutions: {ppm} vs {self.cfg.pixel_per_meter}"
                 )
 
             logger.info("Loading dump json file %s.", self.dump_filename)
@@ -136,7 +137,8 @@ class MapillaryDataModule(pl.LightningDataModule):
                 for cam_id, cam_dict in per_seq["cameras"].items():
                     if cam_dict["model"] != "PINHOLE":
                         raise ValueError(
-                            f"Unsupported camera model: {cam_dict['model']} for {scene},{seq},{cam_id}"
+                            "Unsupported camera model: "
+                            f"{cam_dict['model']} for {scene},{seq},{cam_id}"
                         )
 
             self.image_dirs[scene] = (
@@ -154,7 +156,8 @@ class MapillaryDataModule(pl.LightningDataModule):
         self.pack_data()
 
     def pack_data(self):
-        # We pack the data into compact tensors that can be shared across processes without copy
+        # We pack the data into compact tensors
+        # that can be shared across processes without copy.
         exclude = {
             "compass_angle",
             "compass_accuracy",

@@ -1,9 +1,9 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 
 import json
+from http.client import responses
 from pathlib import Path
 from typing import Any, Dict, Optional
-from http.client import responses
 
 import urllib3
 

@@ -8,6 +8,7 @@ import numpy as np
 import plotly.graph_objects as go
 
 from .parser import (
+    Patterns,
     filter_area,
     filter_node,
     filter_way,
@@ -15,7 +16,6 @@ from .parser import (
     parse_area,
     parse_node,
     parse_way,
-    Patterns,
 )
 from .reader import OSMData
 

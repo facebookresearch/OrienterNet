@@ -1,18 +1,18 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
-import matplotlib.pyplot as plt
 
-from ..utils.io import write_torch_image
-from ..utils.viz_2d import plot_images, features_to_RGB, save_plot
-from ..utils.viz_localization import (
-    likelihood_overlay,
-    plot_pose,
-    plot_dense_rotations,
-    add_circle_inset,
-)
 from ..osm.viz import Colormap, plot_nodes
+from ..utils.io import write_torch_image
+from ..utils.viz_2d import features_to_RGB, plot_images, save_plot
+from ..utils.viz_localization import (
+    add_circle_inset,
+    likelihood_overlay,
+    plot_dense_rotations,
+    plot_pose,
+)
 
 
 def plot_example_single(

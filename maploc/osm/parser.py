@@ -144,7 +144,7 @@ class Patterns:
         building="building($|:.*?)*",
         parking="amenity:parking",
         playground="leisure:(playground|pitch)",
-        grass="(landuse:grass|landcover:grass|landuse:meadow|landuse:flowerbed|natural:grassland)",
+        grass="(landuse:grass|landcover:grass|landuse:meadow|landuse:flowerbed|natural:grassland)",  # noqa E501
         park="leisure:(park|garden|dog_park)",
         forest="(landuse:forest|natural:wood)",
         water="(natural:water|waterway:*)",
@@ -160,7 +160,7 @@ class Patterns:
         building_outline="building($|:.*?)*",
         cycleway="highway:cycleway",
         path="highway:(pedestrian|footway|steps|path|corridor)",
-        road="highway:(motorway|trunk|primary|secondary|tertiary|service|construction|track|unclassified|residential|.*_link)",
+        road="highway:(motorway|trunk|primary|secondary|tertiary|service|construction|track|unclassified|residential|.*_link)",  # noqa E501
         busway="highway:busway",
         tree_row="natural:tree_row",  # maybe merge with node?
     )

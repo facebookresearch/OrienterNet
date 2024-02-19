@@ -1,7 +1,9 @@
 """Copied from opensfm.geo to minimize hard dependencies."""
+
+from typing import Tuple
+
 import numpy as np
 from numpy import ndarray
-from typing import Tuple
 
 WGS84_a = 6378137.0
 WGS84_b = 6356752.314245

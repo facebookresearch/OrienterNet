@@ -54,7 +54,5 @@ def decompose_rotmat(R_c2w):
     R_cv2xyz = Rotation.from_euler("X", -90, degrees=True)
     rot_w2c = R_cv2xyz * Rotation.from_matrix(R_c2w).inv()
     roll, pitch, yaw = rot_w2c.as_euler("YXZ", degrees=True)
-    # rot_w2c_check = R_cv2xyz.inv() * Rotation.from_euler('YXZ', [roll, pitch, yaw], degrees=True)
-    # np.testing.assert_allclose(rot_w2c_check.as_matrix(), R_c2w.T, rtol=1e-6, atol=1e-6)
     # R_plane2c = Rotation.from_euler("ZX", [roll, pitch], degrees=True).as_matrix()
     return roll, pitch, yaw

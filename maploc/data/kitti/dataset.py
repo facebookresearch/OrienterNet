@@ -13,12 +13,12 @@ import torch.utils.data as torchdata
 from omegaconf import OmegaConf
 from scipy.spatial.transform import Rotation
 
-from ... import logger, DATASETS_PATH
+from ... import DATASETS_PATH, logger
 from ...osm.tiling import TileManager
 from ..dataset import MapLocDataset
 from ..sequential import chunk_sequence
 from ..torch import collate, worker_init_fn
-from .utils import parse_split_file, parse_gps_file, get_camera_calibration
+from .utils import get_camera_calibration, parse_gps_file, parse_split_file
 
 
 class KittiDataModule(pl.LightningDataModule):

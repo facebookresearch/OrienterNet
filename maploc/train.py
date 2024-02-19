@@ -1,8 +1,8 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 
 import os.path as osp
-from typing import Optional
 from pathlib import Path
+from typing import Optional
 
 import hydra
 import pytorch_lightning as pl
@@ -10,7 +10,7 @@ import torch
 from omegaconf import DictConfig, OmegaConf
 from pytorch_lightning.utilities import rank_zero_only
 
-from . import logger, pl_logger, EXPERIMENTS_PATH
+from . import EXPERIMENTS_PATH, logger, pl_logger
 from .data import modules as data_modules
 from .module import GenericModule
 

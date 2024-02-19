@@ -4,13 +4,12 @@ import argparse
 from pathlib import Path
 from typing import Optional, Tuple
 
-from omegaconf import OmegaConf, DictConfig
+from omegaconf import DictConfig, OmegaConf
 
 from .. import logger
 from ..conf import data as conf_data_dir
 from ..data import MapillaryDataModule
 from .run import evaluate
-
 
 split_overrides = {
     "val": {

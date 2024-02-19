@@ -2,26 +2,25 @@
 
 import functools
 from itertools import islice
-from typing import Callable, Dict, Optional, Tuple
 from pathlib import Path
+from typing import Callable, Dict, Optional, Tuple
 
 import numpy as np
 import torch
 from omegaconf import DictConfig, OmegaConf
-from torchmetrics import MetricCollection
 from pytorch_lightning import seed_everything
+from torchmetrics import MetricCollection
 from tqdm import tqdm
 
-from .. import logger, EXPERIMENTS_PATH
+from .. import EXPERIMENTS_PATH, logger
 from ..data.torch import collate, unbatch_to_device
-from ..models.voting import argmax_xyr, fuse_gps
 from ..models.metrics import AngleError, LateralLongitudinalError, Location2DError
 from ..models.sequential import GPSAligner, RigidAligner
+from ..models.voting import argmax_xyr, fuse_gps
 from ..module import GenericModule
-from ..utils.io import download_file, DATA_URL
-from .viz import plot_example_single, plot_example_sequential
+from ..utils.io import DATA_URL, download_file
 from .utils import write_dump
-
+from .viz import plot_example_sequential, plot_example_single
 
 pretrained_models = dict(
     OrienterNet_MGL=("orienternet_mgl.ckpt", dict(num_rotations=256)),
