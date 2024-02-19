@@ -2,7 +2,7 @@ name: Format and Lint
 on:
   push:
     branches:
-      - master
+      - main
     paths:
       - '*.py'
       - '*.ipynb'
