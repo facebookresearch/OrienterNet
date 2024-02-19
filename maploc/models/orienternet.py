@@ -106,8 +106,8 @@ class OrienterNet(BaseModel):
         if self.conf.add_temperature:
             scores = scores * torch.exp(self.temperature)
 
-        # Reweight the different rotations based on the number of valid pixels
-        # in each template. Axis-aligned rotation have the maximum number of valid pixels.
+        # Reweight the different rotations based on the number of valid pixels in each
+        # template. Axis-aligned rotation have the maximum number of valid pixels.
         valid_templates = self.template_sampler(valid_bev.float()[None]) > (1 - 1e-4)
         num_valid = valid_templates.float().sum((-3, -2, -1))
         scores = scores / num_valid[..., None, None]

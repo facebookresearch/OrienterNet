@@ -58,7 +58,7 @@ class MapillaryDownloader:
     image_info_url = (
         "https://graph.mapillary.com/{image_id}?access_token={token}&fields={fields}"
     )
-    seq_info_url = "https://graph.mapillary.com/image_ids?access_token={token}&sequence_id={seq_id}"
+    seq_info_url = "https://graph.mapillary.com/image_ids?access_token={token}&sequence_id={seq_id}"  # noqa E501
     max_requests_per_minute = 50_000
 
     def __init__(self, token: str):

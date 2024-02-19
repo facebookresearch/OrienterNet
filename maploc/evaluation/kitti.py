@@ -12,8 +12,8 @@ from .run import evaluate
 
 default_cfg_single = OmegaConf.create({})
 # For the sequential evaluation, we need to center the map around the GT location,
-# since random offsets would accumulate and leave only the GT location with a valid mask.
-# This should not have much impact on the results.
+# since random offsets would accumulate and leave only the GT location with
+# a valid mask. This should not have much impact on the results.
 default_cfg_sequential = OmegaConf.create(
     {
         "data": {

@@ -210,7 +210,7 @@ class EXIF:
         orientation = 1
         if "Image Orientation" in self.tags:
             value = self.tags.get("Image Orientation").values[0]
-            if type(value) == int and value != 0:
+            if isinstance(value, int) and value != 0:
                 orientation = value
         return orientation
 
@@ -244,7 +244,8 @@ class EXIF:
             else:
                 altitude = None
 
-            # Check if GPSAltitudeRef is equal to 1, which means GPSAltitude should be negative, reference: http://www.exif.org/Exif2-2.PDF#page=53
+            # Check if GPSAltitudeRef is equal to 1, which means GPSAltitude
+            # should be negative, reference: http://www.exif.org/Exif2-2.PDF#page=53
             if (
                 "GPS GPSAltitudeRef" in self.tags
                 and self.tags["GPS GPSAltitudeRef"].values[0] == 1

@@ -5,7 +5,6 @@ from typing import Union
 import numpy as np
 import torch
 
-from .. import logger
 from .geo_opensfm import TopocentricConverter
 
 

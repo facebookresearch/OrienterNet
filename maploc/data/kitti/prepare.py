@@ -70,7 +70,7 @@ def download(data_dir: Path):
     for seq in tqdm(seqs):
         logger.info("Working on %s.", seq)
         date = "_".join(seq.split("_")[:3])
-        url = f"https://s3.eu-central-1.amazonaws.com/avg-kitti/raw_data/{seq}/{seq}_sync.zip"
+        url = f"https://s3.eu-central-1.amazonaws.com/avg-kitti/raw_data/{seq}/{seq}_sync.zip"  # noqa E501
         seq_dir = data_dir / date / f"{seq}_sync"
         if seq_dir.exists():
             continue
