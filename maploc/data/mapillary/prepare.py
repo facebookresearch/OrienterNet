@@ -1,17 +1,15 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 
-import asyncio
 import argparse
-from collections import defaultdict
+import asyncio
 import json
 import shutil
+from collections import defaultdict
 from pathlib import Path
 from typing import List
 
-import numpy as np
 import cv2
-from tqdm import tqdm
-from tqdm.contrib.concurrent import thread_map
+import numpy as np
 from omegaconf import DictConfig, OmegaConf
 from opensfm.pygeometry import Camera
 from opensfm.pymap import Shot
@@ -19,30 +17,31 @@ from opensfm.undistort import (
     perspective_camera_from_fisheye,
     perspective_camera_from_perspective,
 )
+from tqdm import tqdm
+from tqdm.contrib.concurrent import thread_map
 
 from ... import logger
 from ...osm.tiling import TileManager
 from ...osm.viz import GeoPlotter
 from ...utils.geo import BoundaryBox, Projection
-from ...utils.io import write_json, download_file, DATA_URL
+from ...utils.io import DATA_URL, download_file, write_json
 from ..utils import decompose_rotmat
+from .dataset import MapillaryDataModule
+from .download import (
+    MapillaryDownloader,
+    fetch_image_infos,
+    fetch_images_pixels,
+    image_filename,
+    opensfm_shot_from_info,
+)
 from .utils import (
+    CameraUndistorter,
+    PanoramaUndistorter,
     keyframe_selection,
     perspective_camera_from_pano,
     scale_camera,
-    CameraUndistorter,
-    PanoramaUndistorter,
     undistort_shot,
 )
-from .download import (
-    MapillaryDownloader,
-    opensfm_shot_from_info,
-    image_filename,
-    fetch_image_infos,
-    fetch_images_pixels,
-)
-from .dataset import MapillaryDataModule
-
 
 location_to_params = {
     "sanfrancisco_soma": {

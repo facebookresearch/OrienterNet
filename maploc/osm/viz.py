@@ -3,8 +3,8 @@
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
-import plotly.graph_objects as go
 import PIL.Image
+import plotly.graph_objects as go
 
 from ..utils.viz_2d import add_text
 from .parser import Groups

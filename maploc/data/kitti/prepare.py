@@ -1,9 +1,9 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 
 import argparse
-from pathlib import Path
 import shutil
 import zipfile
+from pathlib import Path
 
 import numpy as np
 from tqdm.auto import tqdm
@@ -12,9 +12,9 @@ from ... import logger
 from ...osm.tiling import TileManager
 from ...osm.viz import GeoPlotter
 from ...utils.geo import BoundaryBox, Projection
-from ...utils.io import download_file, DATA_URL
-from .utils import parse_gps_file
+from ...utils.io import DATA_URL, download_file
 from .dataset import KittiDataModule
+from .utils import parse_gps_file
 
 split_files = ["test1_files.txt", "test2_files.txt", "train_files.txt"]
 

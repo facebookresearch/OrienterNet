@@ -6,8 +6,8 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
-from PIL import Image
 import rtree
+from PIL import Image
 
 from ..utils.geo import BoundaryBox, Projection
 from .data import MapData

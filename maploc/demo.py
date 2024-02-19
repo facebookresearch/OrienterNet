@@ -2,19 +2,19 @@
 
 from typing import Optional, Tuple
 
-import torch
 import numpy as np
+import torch
 
 from . import logger
-from .evaluation.run import resolve_checkpoint_path, pretrained_models
+from .data.image import pad_image, rectify_image, resize_image
+from .evaluation.run import pretrained_models, resolve_checkpoint_path
 from .models.orienternet import OrienterNet
-from .models.voting import fuse_gps, argmax_xyr
-from .data.image import resize_image, pad_image, rectify_image
+from .models.voting import argmax_xyr, fuse_gps
 from .osm.raster import Canvas
-from .utils.wrappers import Camera
-from .utils.io import read_image
-from .utils.geo import BoundaryBox, Projection
 from .utils.exif import EXIF
+from .utils.geo import BoundaryBox, Projection
+from .utils.io import read_image
+from .utils.wrappers import Camera
 
 try:
     from geopy.geocoders import Nominatim

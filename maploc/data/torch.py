@@ -4,14 +4,14 @@ import collections
 import os
 
 import torch
+from lightning_fabric.utilities.apply_func import move_data_to_device
+from lightning_fabric.utilities.seed import pl_worker_init_function
+from lightning_utilities.core.apply_func import apply_to_collection
 from torch.utils.data import get_worker_info
 from torch.utils.data._utils.collate import (
     default_collate_err_msg_format,
     np_str_obj_array_pattern,
 )
-from lightning_fabric.utilities.seed import pl_worker_init_function
-from lightning_utilities.core.apply_func import apply_to_collection
-from lightning_fabric.utilities.apply_func import move_data_to_device
 
 
 def collate(batch):

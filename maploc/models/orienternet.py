@@ -8,7 +8,10 @@ from . import get_model
 from .base import BaseModel
 from .bev_net import BEVNet
 from .bev_projection import CartesianProjection, PolarProjectionDepth
+from .map_encoder import MapEncoder
+from .metrics import AngleError, AngleRecall, Location2DError, Location2DRecall
 from .voting import (
+    TemplateSampler,
     argmax_xyr,
     conv2d_fft_batchwise,
     expectation_xyr,
@@ -16,10 +19,7 @@ from .voting import (
     mask_yaw_prior,
     nll_loss_xyr,
     nll_loss_xyr_smoothed,
-    TemplateSampler,
 )
-from .map_encoder import MapEncoder
-from .metrics import AngleError, AngleRecall, Location2DError, Location2DRecall
 
 
 class OrienterNet(BaseModel):

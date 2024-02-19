@@ -7,6 +7,7 @@ from typing import Dict, List, Optional, Set, Tuple
 import numpy as np
 
 from .parser import (
+    Patterns,
     filter_area,
     filter_node,
     filter_way,
@@ -14,10 +15,8 @@ from .parser import (
     parse_area,
     parse_node,
     parse_way,
-    Patterns,
 )
 from .reader import OSMData, OSMNode, OSMRelation, OSMWay
-
 
 logger = logging.getLogger(__name__)
 

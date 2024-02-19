@@ -1,10 +1,10 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 
 import json
-from collections import defaultdict
 import os
 import shutil
 import tarfile
+from collections import defaultdict
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -14,7 +14,7 @@ import torch
 import torch.utils.data as torchdata
 from omegaconf import DictConfig, OmegaConf
 
-from ... import logger, DATASETS_PATH
+from ... import DATASETS_PATH, logger
 from ...osm.tiling import TileManager
 from ..dataset import MapLocDataset
 from ..sequential import chunk_sequence

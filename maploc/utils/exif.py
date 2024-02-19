@@ -1,9 +1,10 @@
 """Copied from opensfm.exif to minimize hard dependencies."""
-from pathlib import Path
-import json
+
 import datetime
+import json
 import logging
-from codecs import encode, decode
+from codecs import decode, encode
+from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
 import exifread

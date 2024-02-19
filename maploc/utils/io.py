@@ -1,12 +1,12 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 
 import json
-import requests
 import shutil
 from pathlib import Path
 
 import cv2
 import numpy as np
+import requests
 import torch
 from tqdm.auto import tqdm
 

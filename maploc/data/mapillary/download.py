@@ -1,24 +1,23 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 
+import asyncio
 import json
 from pathlib import Path
 
-import numpy as np
 import httpx
-import asyncio
-from aiolimiter import AsyncLimiter
+import numpy as np
 import tqdm
-
+from aiolimiter import AsyncLimiter
 from opensfm.pygeometry import Camera, Pose
 from opensfm.pymap import Shot
 
 from ... import logger
 from ...utils.geo import Projection
 
-
 semaphore = asyncio.Semaphore(100)  # number of parallel threads.
 image_filename = "{image_id}.jpg"
 info_filename = "{image_id}.json"
+
 
 def retry(times, exceptions):
     def decorator(func):
@@ -30,8 +29,11 @@ def retry(times, exceptions):
                 except exceptions:
                     attempt += 1
             return await func(*args, **kwargs)
+
         return wrapper
+
     return decorator
+
 
 class MapillaryDownloader:
     image_fields = (

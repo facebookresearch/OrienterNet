@@ -3,8 +3,8 @@
 import numpy as np
 import torch
 
-from .voting import argmax_xyr, log_softmax_spatial, sample_xyr
 from .utils import deg2rad, make_grid, rotmat2d
+from .voting import argmax_xyr, log_softmax_spatial, sample_xyr
 
 
 def log_gaussian(points, mean, sigma):

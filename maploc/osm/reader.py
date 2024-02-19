@@ -6,8 +6,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from lxml import etree
 import numpy as np
+from lxml import etree
 
 from ..utils.geo import BoundaryBox, Projection
 
