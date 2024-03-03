@@ -13,6 +13,7 @@ from ..utils.viz_localization import (
     plot_dense_rotations,
     plot_pose,
 )
+from .utils import prepare_for_plotting
 
 
 def plot_example_single(
@@ -28,7 +29,11 @@ def plot_example_single(
     show_fused=False,
     show_dir_error=False,
     show_masked_prob=False,
+    refactored_input=False
 ):
+    if refactored_input:
+        data, pred = prepare_for_plotting(data, pred)
+
     scene, name, rasters, uv_gt = (data[k] for k in ("scene", "name", "map", "uv"))
     uv_gps = data.get("uv_gps")
     yaw_gt = data["roll_pitch_yaw"][-1].numpy()
