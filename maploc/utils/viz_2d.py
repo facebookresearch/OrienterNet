@@ -10,7 +10,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-def plot_images(imgs, titles=None, cmaps="gray", dpi=100, pad=0.5, adaptive=True):
+def plot_images(
+    imgs, titles=None, origins=None, cmaps="gray", dpi=100, pad=0.5, adaptive=True
+):
     """Plot a set of images horizontally.
     Args:
         imgs: a list of NumPy or PyTorch images, RGB (H, W, 3) or mono (H, W).
@@ -33,7 +35,11 @@ def plot_images(imgs, titles=None, cmaps="gray", dpi=100, pad=0.5, adaptive=True
     if n == 1:
         ax = [ax]
     for i in range(n):
-        ax[i].imshow(imgs[i], cmap=plt.get_cmap(cmaps[i]))
+        ax[i].imshow(
+            imgs[i],
+            cmap=plt.get_cmap(cmaps[i]),
+            origin=origins[i] if origins else "upper",
+        )
         ax[i].get_yaxis().set_ticks([])
         ax[i].get_xaxis().set_ticks([])
         ax[i].set_axis_off()

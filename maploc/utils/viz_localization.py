@@ -38,10 +38,25 @@ def heatmap2rgb(scores, mask=None, clip_min=0.05, alpha=0.8, cmap="jet"):
     return rgb
 
 
-def plot_pose(axs, xy, yaw=None, s=1 / 35, c="r", a=1, w=0.015, dot=True, zorder=10):
+def plot_pose(
+    axs,
+    xy,
+    yaw=None,
+    s=1 / 35,
+    c="r",
+    a=1,
+    w=0.015,
+    dot=True,
+    zorder=10,
+    refactored=False,
+):
     if yaw is not None:
         yaw = np.deg2rad(yaw)
-        uv = np.array([np.sin(yaw), -np.cos(yaw)])
+        if not refactored:
+            uv = np.array([np.sin(yaw), -np.cos(yaw)])
+        else:
+            uv = np.array([np.cos(yaw), np.sin(yaw)])
+
     xy = np.array(xy) + 0.5
     if not isinstance(axs, list):
         axs = [axs]
@@ -65,10 +80,21 @@ def plot_pose(axs, xy, yaw=None, s=1 / 35, c="r", a=1, w=0.015, dot=True, zorder
 
 
 def plot_dense_rotations(
-    ax, prob, thresh=0.01, skip=10, s=1 / 15, k=3, c="k", w=None, **kwargs
+    ax,
+    prob,
+    thresh=0.01,
+    skip=10,
+    s=1 / 15,
+    k=3,
+    c="k",
+    w=None,
+    refactored=False,
+    **kwargs
 ):
     t = torch.argmax(prob, -1)
     yaws = t.numpy() / prob.shape[-1] * 360
+    if refactored:
+        yaws = 90 - yaws
     prob = prob.max(-1).values / prob.max()
     mask = prob > thresh
     masked = prob.masked_fill(~mask, 0)
@@ -79,13 +105,14 @@ def plot_dense_rotations(
     indices = np.where(mask.numpy() > 0)
     plot_pose(
         ax,
-        indices[::-1],
+        indices[:: (1 if refactored else -1)],
         yaws[indices],
         s=s,
         c=c,
         dot=False,
         zorder=0.1,
         w=w,
+        refactored=refactored,
         **kwargs,
     )
 
@@ -111,7 +138,10 @@ def add_circle_inset(
     inset_size=0.4,
     inset_offset=0.005,
     color="red",
+    refactored=False,
 ):
+    # TODO: figure out how to add inset with the new axes conventions.
+
     data_t_axes = ax.transAxes + ax.transData.inverted()
     if corner is None:
         center_axes = np.array(data_t_axes.inverted().transform(center))

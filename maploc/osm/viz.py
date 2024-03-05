@@ -138,18 +138,18 @@ class Colormap:
         ax2.tick_params(labelsize=15)
 
 
-def plot_nodes(idx, raster, fontsize=8, size=15):
+def plot_nodes(idx, raster, fontsize=8, size=15, refactored=False):
     ax = plt.gcf().axes[idx]
     ax.autoscale(enable=False)
-    nodes_xy = np.stack(np.where(raster > 0)[::-1], -1)
-    nodes_val = raster[tuple(nodes_xy.T[::-1])] - 1
+    nodes_xy = np.stack(np.where(raster > 0)[:: (1 if refactored else -1)], -1)
+    nodes_val = raster[tuple(nodes_xy.T[:: (1 if refactored else -1)])] - 1
     ax.scatter(*nodes_xy.T, c="k", s=size)
     for xy, val in zip(nodes_xy, nodes_val):
         group = Groups.nodes[val]
         add_text(
             idx,
             group,
-            xy + 2,
+            xy + [2, -2 if refactored else 2],
             lcolor=None,
             fs=fontsize,
             color="k",

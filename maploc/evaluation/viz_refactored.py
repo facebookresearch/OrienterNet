@@ -13,10 +13,8 @@ from ..utils.viz_localization import (
     plot_dense_rotations,
     plot_pose,
 )
-from .utils import prepare_for_plotting
 
-
-def plot_example_single(
+def plot_example_single_refactored(
     idx,
     model,
     pred,
@@ -29,32 +27,35 @@ def plot_example_single(
     show_fused=False,
     show_dir_error=False,
     show_masked_prob=False,
-    refactored_input=False,
 ):
-    if refactored_input:
-        data, pred = prepare_for_plotting(data, pred)
 
-    scene, name, rasters, uv_gt = (data[k] for k in ("scene", "name", "map", "uv"))
-    uv_gps = data.get("uv_gps")
-    yaw_gt = data["roll_pitch_yaw"][-1].numpy()
+    scene, name, rasters, map_T_query_gt = (data[k] for k in ("scene", "name", "map", "map_T_query_gt"))
+    ij_gt = map_T_query_gt.t.squeeze(dim=(0,1))
+    yaw_gt = map_T_query_gt.angle.squeeze()
+    
+    ij_gps = data.get("ij_gps")
+    map_T_query_p = pred["map_T_query_max"]
+    ij_p = map_T_query_p.t.squeeze(dim=(0,1))
+    yaw_p = map_T_query_p.angle.squeeze()
+
     image = data["image"].permute(1, 2, 0)
     if "valid" in data:
         image = image.masked_fill(~data["valid"].unsqueeze(-1), 0.3)
 
-    lp_uvt = lp_uv = pred["log_probs"]
+    lp_ijt = lp_ij = pred["log_probs"]
     if show_fused and "log_probs_fused" in pred:
-        lp_uvt = lp_uv = pred["log_probs_fused"]
+        lp_ijt = lp_ij = pred["log_probs_fused"]
     elif not show_masked_prob and "scores_unmasked" in pred:
-        lp_uvt = lp_uv = pred["scores_unmasked"]
-    has_rotation = lp_uvt.ndim == 3
+        lp_ijt = lp_ij = pred["scores_unmasked"]
+    has_rotation = lp_ijt.ndim == 3
     if has_rotation:
-        lp_uv = lp_uvt.max(-1).values
-    if lp_uv.min() > -np.inf:
-        lp_uv = lp_uv.clip(min=np.percentile(lp_uv, 1))
-    prob = lp_uv.exp()
-    uv_p, yaw_p = pred["uv_max"], pred.get("yaw_max")
-    if show_fused and "uv_fused" in pred:
-        uv_p, yaw_p = pred["uv_fused"], pred.get("yaw_fused")
+        lp_ij = lp_ijt.max(-1).values
+    if lp_ij.min() > -np.inf:
+        lp_ij = lp_ij.clip(min=np.percentile(lp_ij, 1))
+    prob = lp_ij.exp()
+    
+    if show_fused and "ij_fused" in pred:
+        ij_p, yaw_p = pred["ij_fused"], pred.get("yaw_fused")
     feats_map = pred["map"]["map_features"][0]
     (feats_map_rgb,) = features_to_RGB(feats_map.numpy())
 
@@ -72,9 +73,11 @@ def plot_example_single(
 
     map_viz = Colormap.apply(rasters)
     overlay = likelihood_overlay(prob.numpy(), map_viz.mean(-1, keepdims=True))
+    map_viz, overlay, feats_map_rgb = [np.swapaxes(x, 0, 1) for x in (map_viz, overlay, feats_map_rgb)]
     plot_images(
         [image, map_viz, overlay, feats_map_rgb],
         titles=[text1, "map", "likelihood", "neural map"],
+        origins=["upper", "lower", "lower", "lower"],
         dpi=75,
         cmaps="jet",
     )
@@ -83,16 +86,16 @@ def plot_example_single(
     axes[1].images[0].set_interpolation("none")
     axes[2].images[0].set_interpolation("none")
     Colormap.add_colorbar()
-    plot_nodes(1, rasters[2])
+    plot_nodes(1, rasters[2], refactored=True)
 
-    if show_gps and uv_gps is not None:
-        plot_pose([1], uv_gps, c="blue")
-    plot_pose([1], uv_gt, yaw_gt, c="red")
-    plot_pose([1], uv_p, yaw_p, c="k")
-    plot_dense_rotations(2, lp_uvt.exp())
-    inset_center = pred["uv_max"] if results["xy_max_error"] < 5 else uv_gt
-    axins = add_circle_inset(axes[2], inset_center)
-    axins.scatter(*uv_gt, lw=1, c="red", ec="k", s=50, zorder=15)
+    if show_gps and ij_gps is not None:
+        plot_pose([1], ij_gps, c="blue", refactored=True)
+    plot_pose([1], ij_gt, yaw_gt, c="red", refactored=True)
+    plot_pose([1], ij_p, yaw_p, c="k", refactored=True)
+    plot_dense_rotations(2, lp_ijt.exp(), refactored=True)
+    inset_center = ij_p if results["xy_max_error"] < 5 else ij_gt
+    # axins = add_circle_inset(axes[2], inset_center, refactored=True)
+    # axins.scatter(*ij_gt, lw=1, c="red", ec="k", s=50, zorder=15)
     axes[0].text(
         0.003,
         0.003,
@@ -103,6 +106,7 @@ def plot_example_single(
         ha="left",
         color="w",
     )
+    
     plt.show()
     if out_dir is not None:
         name_ = name.replace("/", "_")
@@ -115,18 +119,18 @@ def plot_example_single(
             plot_images([map_viz])
             plt.gca().images[0].set_interpolation("none")
             plot_nodes(0, rasters[2])
-            plot_pose([0], uv_gt, yaw_gt, c="red")
-            plot_pose([0], pred["uv_max"], pred["yaw_max"], c="k")
+            plot_pose([0], ij_gt, yaw_gt, c="red")
+            plot_pose([0], ij_p, yaw_p, c="k")
             save_plot(p.format("map"))
             plt.close()
-            plot_images([lp_uv], cmaps="jet")
-            plot_dense_rotations(0, lp_uvt.exp())
+            plot_images([lp_ij], cmaps="jet")
+            plot_dense_rotations(0, lp_ijt.exp())
             save_plot(p.format("loglikelihood"), dpi=100)
             plt.close()
             plot_images([overlay])
             plt.gca().images[0].set_interpolation("none")
             axins = add_circle_inset(plt.gca(), inset_center)
-            axins.scatter(*uv_gt, lw=1, c="red", ec="k", s=50)
+            axins.scatter(*ij_gt, lw=1, c="red", ec="k", s=50)
             save_plot(p.format("likelihood"))
             plt.close()
             write_torch_image(
@@ -151,11 +155,14 @@ def plot_example_single(
     # feats_map_rgb, feats_q_rgb, = features_to_RGB(
     #     feats_map.numpy(), feats_q.numpy(), masks=[None, mask_bev])
     norm_map = torch.norm(feats_map, dim=0)
-
+    conf_q, feats_q_rgb, norm_map = [np.swapaxes(x, 0, 1 ) for x in [conf_q, feats_q_rgb, norm_map]]
+    if prior is not None: 
+        prior = np.swapaxes(prior, 0, 1)
     plot_images(
         [conf_q, feats_q_rgb, norm_map] + ([] if prior is None else [prior]),
         titles=["BEV confidence", "BEV features", "map norm"]
         + ([] if prior is None else ["map prior"]),
+        origins=["lower", "lower", "lower"] + ([] if prior is None else ["lower"]),
         dpi=50,
         cmaps="jet",
     )
@@ -164,20 +171,3 @@ def plot_example_single(
     if out_dir is not None:
         save_plot(p.format("bev"))
         plt.close()
-
-
-def plot_example_sequential(
-    idx,
-    model,
-    pred,
-    data,
-    results,
-    plot_bev=True,
-    out_dir=None,
-    fig_for_paper=False,
-    show_gps=False,
-    show_fused=False,
-    show_dir_error=False,
-    show_masked_prob=False,
-):
-    return
