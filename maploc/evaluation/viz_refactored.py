@@ -14,6 +14,7 @@ from ..utils.viz_localization import (
     plot_pose,
 )
 
+
 def plot_example_single_refactored(
     idx,
     model,
@@ -29,13 +30,15 @@ def plot_example_single_refactored(
     show_masked_prob=False,
 ):
 
-    scene, name, rasters, map_T_query_gt = (data[k] for k in ("scene", "name", "map", "map_T_query_gt"))
-    ij_gt = map_T_query_gt.t.squeeze(dim=(0,1))
+    scene, name, rasters, map_T_query_gt = (
+        data[k] for k in ("scene", "name", "map", "map_T_query_gt")
+    )
+    ij_gt = map_T_query_gt.t.squeeze(dim=(0, 1))
     yaw_gt = map_T_query_gt.angle.squeeze()
-    
+
     ij_gps = data.get("ij_gps")
     map_T_query_p = pred["map_T_query_max"]
-    ij_p = map_T_query_p.t.squeeze(dim=(0,1))
+    ij_p = map_T_query_p.t.squeeze(dim=(0, 1))
     yaw_p = map_T_query_p.angle.squeeze()
 
     image = data["image"].permute(1, 2, 0)
@@ -53,7 +56,7 @@ def plot_example_single_refactored(
     if lp_ij.min() > -np.inf:
         lp_ij = lp_ij.clip(min=np.percentile(lp_ij, 1))
     prob = lp_ij.exp()
-    
+
     if show_fused and "ij_fused" in pred:
         ij_p, yaw_p = pred["ij_fused"], pred.get("yaw_fused")
     feats_map = pred["map"]["map_features"][0]
@@ -73,7 +76,9 @@ def plot_example_single_refactored(
 
     map_viz = Colormap.apply(rasters)
     overlay = likelihood_overlay(prob.numpy(), map_viz.mean(-1, keepdims=True))
-    map_viz, overlay, feats_map_rgb = [np.swapaxes(x, 0, 1) for x in (map_viz, overlay, feats_map_rgb)]
+    map_viz, overlay, feats_map_rgb = [
+        np.swapaxes(x, 0, 1) for x in (map_viz, overlay, feats_map_rgb)
+    ]
     plot_images(
         [image, map_viz, overlay, feats_map_rgb],
         titles=[text1, "map", "likelihood", "neural map"],
@@ -106,7 +111,7 @@ def plot_example_single_refactored(
         ha="left",
         color="w",
     )
-    
+
     plt.show()
     if out_dir is not None:
         name_ = name.replace("/", "_")
@@ -155,8 +160,10 @@ def plot_example_single_refactored(
     # feats_map_rgb, feats_q_rgb, = features_to_RGB(
     #     feats_map.numpy(), feats_q.numpy(), masks=[None, mask_bev])
     norm_map = torch.norm(feats_map, dim=0)
-    conf_q, feats_q_rgb, norm_map = [np.swapaxes(x, 0, 1 ) for x in [conf_q, feats_q_rgb, norm_map]]
-    if prior is not None: 
+    conf_q, feats_q_rgb, norm_map = [
+        np.swapaxes(x, 0, 1) for x in [conf_q, feats_q_rgb, norm_map]
+    ]
+    if prior is not None:
         prior = np.swapaxes(prior, 0, 1)
     plot_images(
         [conf_q, feats_q_rgb, norm_map] + ([] if prior is None else [prior]),
