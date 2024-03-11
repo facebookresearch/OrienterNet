@@ -244,7 +244,12 @@ class Transform2D(TensorWrapper):
     @classmethod
     def from_Transform3D(cls, transform: "Transform3D"):
         """SE(2) pose from an SE(3) pose, ignoring roll and pitch"""
-        return cls.from_Rt(transform.R, transform.t[..., :2])
+        angle_deg = (
+            torch.atan2(transform.R[..., 1, 0][None], transform.R[..., 0, 0][None])
+            * 180
+            / math.pi
+        )
+        return cls.from_degrees(angle_deg, transform.t[..., :2])
 
     @classmethod
     def from_degrees(cls, angle: torch.Tensor, t: torch.Tensor):
@@ -252,7 +257,7 @@ class Transform2D(TensorWrapper):
         rad = torch.deg2rad(angle)
         cos = torch.cos(rad)
         sin = torch.sin(rad)
-        Rt_flat = torch.stack([cos, -sin, sin, cos, t[..., :1], t[..., 1:]], -1)
+        Rt_flat = torch.cat([cos, -sin, sin, cos, t[..., 0][None], t[..., 1][None]], -1)
         return cls(Rt_flat)
 
     @property
