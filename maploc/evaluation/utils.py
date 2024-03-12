@@ -66,35 +66,28 @@ def refactor_model_output(batch_, pred_):
     def adjust_yaw(angle):
         return 90 - angle
 
-    batch["roll_pitch_yaw"][..., -1] = adjust_yaw(batch["roll_pitch_yaw"][..., -1])
-    pred["yaw_max"][..., -1] = adjust_yaw(pred["yaw_max"][..., -1])
-    pred["yaw_expectation"][..., -1] = adjust_yaw(pred["yaw_expectation"])
+    # change ij_gt + yaw to Transform2D object map_T_query
+    yaw_gt = adjust_yaw(batch["roll_pitch_yaw"][..., -1])
+    ij_gt = swap_uv_ij(batch["uv"])
+    batch["map_T_query_gt"] = Transform2D.from_degrees(yaw_gt[None], ij_gt)
     batch.update(
         {
             "ij_gps": swap_uv_ij(batch.get("uv_gps")),
-            "ij": swap_uv_ij(batch["uv"]),  # gt,
             "ij_init": swap_uv_ij(batch["uv_init"]),
         }
     )
+    del batch["uv"], batch["uv_gps"], batch["uv_init"], batch["roll_pitch_yaw"]
 
-    # change ij_gt + yaw to Transform2D object map_T_query
-    batch["map_T_query_gt"] = Transform2D.from_degrees(
-        batch["roll_pitch_yaw"][..., -1:], batch["ij"]
-    )
-
-    pred.update(
-        {
-            "ij_max": swap_uv_ij(pred["uv_max"]),
-            "ij_expectation": swap_uv_ij(pred["uv_expectation"]),
-        }
-    )
-
-    pred["map_T_query_max"] = Transform2D.from_degrees(
-        pred["yaw_max"][None], pred["ij_max"]
-    )
+    yaw_max = adjust_yaw(pred["yaw_max"][..., -1:])[None]
+    ij_max = swap_uv_ij(pred["uv_max"])
+    yaw_expectation = adjust_yaw(pred["yaw_expectation"])[None]
+    ij_expectation = swap_uv_ij(pred["uv_expectation"])
+    pred["map_T_query_max"] = Transform2D.from_degrees(yaw_max, ij_max)
     pred["map_T_query_expectation"] = Transform2D.from_degrees(
-        pred["yaw_expectation"][None], pred["ij_expectation"]
+        yaw_expectation, ij_expectation
     )
+    del pred["yaw_max"], pred["uv_max"], pred["yaw_expectation"], pred["uv_expectation"]
+    del pred["uvr_max"], pred["uvr_expectation"]
 
     batch.update(
         {k: torch.rot90(batch[k], -1, dims=(-2, -1)) for k in ["map", "map_mask"]}
@@ -124,6 +117,10 @@ def refactor_model_output(batch_, pred_):
 
     if "uv_fused" in pred:
         pred["ij_fused"] = swap_uv_ij(pred["uv_fused"])
+        del pred["uv_fused"]
+    if "yaw_fused" in pred:
+        pred["yaw_fused"] = adjust_yaw(pred["yaw_fused"])[None]
+
     if "log_probs_fused" in pred:
         pred["log_probs_fused"] = torch.rot90(
             pred["log_probs_fused"], -1, dims=(-3, -2)
@@ -134,66 +131,3 @@ def refactor_model_output(batch_, pred_):
         )
 
     return batch, pred
-
-
-def prepare_for_plotting(batch, pred):
-    """Temporary function to undo the changes made to the model output"""
-    batch_new = deepcopy(batch)
-    pred_new = deepcopy(pred)
-
-    # Change ij indexing to uv for matplotlib
-    batch_new.update(
-        {
-            "uv_gps": swap_uv_ij(batch_new.get("ij_gps")),
-            "uv": swap_uv_ij(batch_new["ij"]),  # gt,
-            "uv_init": swap_uv_ij(batch_new["ij_init"]),
-        }
-    )
-    pred_new.update(
-        {
-            "uv_max": swap_uv_ij(pred_new["ij_max"]),
-            "uv_expectation": swap_uv_ij(pred_new["ij_expectation"]),
-            "uvr_max": swap_uv_ij(pred_new["ijr_max"]),
-            "uvr_expectation": swap_uv_ij(pred_new["ijr_expectation"]),
-        }
-    )
-
-    # Convert map's memory layout to spatial layout for viz
-    batch_new.update(
-        {k: torch.rot90(batch_new[k], 1, dims=(-2, -1)) for k in ["map", "map_mask"]}
-    )
-
-    pred_new["map"].update(
-        {
-            k: torch.rot90(pred_new["map"][k], 1, dims=(-2, -1))
-            for k in ["map_features", "log_prior"]
-        }
-    )
-    pred_new["bev"].update(
-        {
-            k: torch.rot90(pred_new["bev"][k], 1, dims=(-2, -1))
-            for k in ["output", "confidence"]
-        }
-    )
-    pred_new.update(
-        {
-            k: torch.rot90(pred_new[k], 1, dims=(-2, -1))
-            for k in ["features_bev", "valid_bev"]
-        }
-    )
-    pred_new.update(
-        {k: torch.rot90(pred_new[k], 1, dims=(-3, -2)) for k in ["scores", "log_probs"]}
-    )
-
-    if "ij_fused" in pred:
-        pred_new["uv_fused"] = swap_uv_ij(pred_new["ij_fused"])
-    if "log_probs_fused" in pred:
-        pred_new["log_probs_fused"] = torch.rot90(
-            pred_new["log_probs_fused"], 1, dims=(-3, -2)
-        )
-    if "scores_unmasked" in pred:
-        pred_new["scores_unmasked"] = torch.rot90(
-            pred_new["scores_unmasked"], 1, dims=(-3, -2)
-        )
-
-    return batch_new, pred_new
