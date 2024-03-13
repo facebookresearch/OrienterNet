@@ -317,7 +317,11 @@ class Transform2D(TensorWrapper):
             dr: rotation angle in degrees.
             dt: translation distance in meters.
         """
-        dr = torch.atan2(self.R[..., 1, 0], self.R[..., 0, 0]) * 180 / math.pi
+        dr = (
+            torch.atan2(self.R[..., 1, 0][None], self.R[..., 0, 0][None])
+            * 180
+            / math.pi
+        )
         dt = torch.norm(self.t, dim=-1)
         return dr, dt
 
