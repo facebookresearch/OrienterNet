@@ -51,12 +51,11 @@ def plot_pose(
     refactored=False,
 ):
     if yaw is not None:
-        yaw = np.deg2rad(yaw)
+        yaw = np.deg2rad(np.array(yaw))
         if not refactored:
             uv = np.array([np.sin(yaw), -np.cos(yaw)])
         else:
             uv = np.array([np.cos(yaw), np.sin(yaw)])
-
     xy = np.array(xy) + 0.5
     if not isinstance(axs, list):
         axs = [axs]
@@ -140,7 +139,6 @@ def add_circle_inset(
     color="red",
     refactored=False,
 ):
-    # TODO: figure out how to add inset with the new axes conventions.
 
     data_t_axes = ax.transAxes + ax.transData.inverted()
     if corner is None:
