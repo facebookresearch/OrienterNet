@@ -212,8 +212,30 @@ class Transform2D(TensorWrapper):
     """SE(2) transformation with 2-DoF translation and 1-DoF rotation"""
 
     def __init__(self, data: torch.Tensor):
-        assert data.shape[-1] == 6
+        assert data.shape[-1] == 3  # angle_deg, x, y
         super().__init__(data)
+
+    @property
+    def angle(self) -> torch.Tensor:
+        """Returns angle in degrees"""
+        return self._data[..., :1]
+        # return self.magnitude()[0]
+
+    @property
+    def t(self) -> torch.Tensor:
+        """Underlying translation vector with shape (..., 2)."""
+        return self._data[..., -2:]
+
+    @classmethod
+    def from_degrees(cls, angle: torch.Tensor, t: torch.Tensor):
+        """SE(2) pose from degrees. Rotation is counter-clockwise from +ve X"""
+        # rad = torch.deg2rad(angle)
+        # cos = torch.cos(rad)
+        # sin = torch.sin(rad)
+        # Rt_flat = torch.cat([cos, -sin, sin, cos, t[..., 0][None],
+        # t[..., 1][None]], -1)
+        rt_flat = torch.cat([angle, t[..., 0:2]], -1)
+        return cls(rt_flat)
 
     @classmethod
     @autocast
@@ -228,53 +250,50 @@ class Transform2D(TensorWrapper):
         assert R.shape[-2:] == (2, 2)
         assert t.shape[-1] == 2
         assert R.shape[:-2] == t.shape[:-1]
-        data = torch.cat([R.flatten(start_dim=-2), t], -1)
-        return cls(data)
+        # data = torch.cat([R.flatten(start_dim=-2), t], -1)
+        angle_deg = torch.arctan2(R[..., 1, 0], R[..., 0, 0]) * 180 / math.pi
+        return cls.from_degrees(angle_deg[None], t[..., :2])
+        # return cls(data)
 
-    @classmethod
-    def from_3x3mat(cls, T: torch.Tensor):
-        """Pose from an SE(2) transformation matrix.
-        Args:
-            T: transformation matrix with shape (..., 3, 3).
-        """
-        assert T.shape[-2:] == (3, 3)
-        R, t = T[..., :2, :2], T[..., :2, 2]
-        return cls.from_Rt(R, t)
+    # @classmethod
+    # def from_3x3mat(cls, T: torch.Tensor):
+    #     """Pose from an SE(2) transformation matrix.
+    #     Args:
+    #         T: transformation matrix with shape (..., 3, 3).
+    #     """
+    #     assert T.shape[-2:] == (3, 3)
+    #     R, t = T[..., :2, :2], T[..., :2, 2]
+    #     return cls.from_Rt(R, t)
 
     @classmethod
     def from_Transform3D(cls, transform: "Transform3D"):
-        """SE(2) pose from an SE(3) pose, ignoring roll and pitch"""
+        """SE(2) pose from an SE(3) pose.
+        Assumes Transform3D is a camera pose in world frame.
+        Computes angle_deg between world x and camera z axes."""
         angle_deg = (
-            torch.atan2(transform.R[..., 1, 0][None], transform.R[..., 0, 0][None])
+            torch.arctan2(transform.R[..., 1, 2][None], transform.R[..., 0, 2][None])
             * 180
             / math.pi
         )
         return cls.from_degrees(angle_deg, transform.t[..., :2])
-
-    @classmethod
-    def from_degrees(cls, angle: torch.Tensor, t: torch.Tensor):
-        """SE(2) pose from degrees. Rotation is counter-clockwise from +ve X"""
-        rad = torch.deg2rad(angle)
-        cos = torch.cos(rad)
-        sin = torch.sin(rad)
-        Rt_flat = torch.cat([cos, -sin, sin, cos, t[..., 0][None], t[..., 1][None]], -1)
-        return cls(Rt_flat)
+        # return cls(transform.R, transform.t[..., :2])
 
     @property
     def R(self) -> torch.Tensor:
         """Underlying rotation matrix with shape (..., 2, 2)."""
-        rvec = self._data[..., :4]
-        return rvec.reshape(rvec.shape[:-1] + (2, 2))
+        rad = torch.deg2rad(self.angle)
+        cos = torch.cos(rad)
+        sin = torch.sin(rad)
+        R_flat = torch.cat([cos, -sin, sin, cos], -1)
+        return R_flat.reshape(R_flat.shape[:-1] + (2, 2))
+        # rvec = self._data[..., :4]
+        # return rvec.reshape(rvec.shape[:-1] + (2, 2))
 
-    @property
-    def angle(self) -> torch.Tensor:
-        """Returns angle in degrees"""
-        return self.magnitude()[0]
-
-    @property
-    def t(self) -> torch.Tensor:
-        """Underlying translation vector with shape (..., 2)."""
-        return self._data[..., -2:]
+    # def to_3x3mat(self):
+    # mat = torch.eye(3).unsqueeze(0).repeat(self.shape + (1, 1))
+    # mat[..., :2, :2] = self.R
+    # mat[..., :2, 2] = self.t
+    # return mat
 
     def inv(self) -> "Transform2D":
         """Invert an SE(2) pose."""
@@ -317,16 +336,19 @@ class Transform2D(TensorWrapper):
             dr: rotation angle in degrees.
             dt: translation distance in meters.
         """
-        dr = (
-            torch.atan2(self.R[..., 1, 0][None], self.R[..., 0, 0][None])
-            * 180
-            / math.pi
-        )
+        # dr = (
+        #     torch.atan2(self.R[..., 1, 0][None], self.R[..., 0, 0][None])
+        #     * 180
+        #     / torch.pi
+        # )
+        dr = self.angle % 360
+        dr = torch.min(dr, 360 - dr)
         dt = torch.norm(self.t, dim=-1)
         return dr, dt
 
     def __repr__(self):
-        return f"Transform2D: {self.shape} {self.dtype} {self.device}"
+        return f"Transform2D: {self.shape} {self.dtype} {self.device}. \
+            angle: {self.angle}. t: {self.t}"
 
 
 class Camera(TensorWrapper):
