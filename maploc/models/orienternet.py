@@ -201,17 +201,13 @@ class OrienterNet(BaseModel):
 
     def metrics(self):
         return {
-            "xy_max_error": Location2DError("map_T_cam_max", self.conf.pixel_per_meter),
+            "xy_max_error": Location2DError("dt_max"),
             "xy_expectation_error": Location2DError(
                 "map_T_cam_expectation", self.conf.pixel_per_meter
             ),
-            "yaw_max_error": AngleError("map_T_cam_max"),
-            "xy_recall_2m": Location2DRecall(
-                2.0, self.conf.pixel_per_meter, "map_T_cam_max"
-            ),
-            "xy_recall_5m": Location2DRecall(
-                5.0, self.conf.pixel_per_meter, "map_T_cam_max"
-            ),
-            "yaw_recall_2°": AngleRecall(2.0, "map_T_cam_max"),
-            "yaw_recall_5°": AngleRecall(5.0, "map_T_cam_max"),
+            "yaw_max_error": AngleError("dr_max"),
+            "xy_recall_2m": Location2DRecall(2.0, key="dt_max"),
+            "xy_recall_5m": Location2DRecall(5.0, key="dt_max"),
+            "yaw_recall_2°": AngleRecall(2.0, "dr_max"),
+            "yaw_recall_5°": AngleRecall(5.0, "dr_max"),
         }

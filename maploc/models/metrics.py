@@ -19,7 +19,7 @@ def angle_error(t, t_gt):
 
 class Location2DRecall(torchmetrics.MeanMetric):
     def __init__(
-        self, threshold, pixel_per_meter, key="map_T_cam_max", *args, **kwargs
+        self, threshold, pixel_per_meter=None, key="map_T_cam_max", *args, **kwargs
     ):
         self.threshold = threshold
         self.ppm = pixel_per_meter
@@ -27,7 +27,11 @@ class Location2DRecall(torchmetrics.MeanMetric):
         super().__init__(*args, **kwargs)
 
     def update(self, pred, data):
-        error = location_error(pred[self.key].t, data["map_T_cam"].t, self.ppm)
+        if self.key[:3] == "dt_":
+            error = pred[self.key]
+        else:
+            assert self.ppm is not None
+            error = location_error(pred[self.key].t, data["map_T_cam"].t, self.ppm)
         super().update((error <= self.threshold).float())
 
 
@@ -38,8 +42,10 @@ class AngleRecall(torchmetrics.MeanMetric):
         super().__init__(*args, **kwargs)
 
     def update(self, pred, data):
-        # error = angle_error(pred[self.key], data["roll_pitch_yaw"][..., -1])
-        error = angle_error(pred[self.key].angle, data["map_T_cam"].angle)
+        if self.key[:3] == "dr_":
+            error = pred[self.key]
+        else:
+            error = angle_error(pred[self.key].angle, data["map_T_cam"].angle)
         super().update((error <= self.threshold).float())
 
 
@@ -68,19 +74,26 @@ class AngleError(MeanMetricWithRecall):
         self.key = key
 
     def update(self, pred, data):
-        value = angle_error(pred[self.key].angle, data["map_T_cam"].angle)
+        if self.key[:3] == "dr_":
+            value = pred[self.key]
+        else:
+            value = angle_error(pred[self.key].angle, data["map_T_cam"].angle)
         if value.numel():
             self.value.append(value)
 
 
 class Location2DError(MeanMetricWithRecall):
-    def __init__(self, key, pixel_per_meter):
+    def __init__(self, key, pixel_per_meter=None):
         super().__init__()
         self.key = key
         self.ppm = pixel_per_meter
 
     def update(self, pred, data):
-        value = location_error(pred[self.key].t, data["map_T_cam"].t, self.ppm)
+        if self.key[:3] == "dt_":
+            value = pred[self.key]
+        else:
+            assert self.ppm is not None
+            value = location_error(pred[self.key].t, data["map_T_cam"].t, self.ppm)
         if value.numel():
             self.value.append(value)
 
