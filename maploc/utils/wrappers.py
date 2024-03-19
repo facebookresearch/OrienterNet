@@ -252,7 +252,7 @@ class Transform2D(TensorWrapper):
     def from_Transform3D(cls, transform: "Transform3D"):
         """SE(2) pose from an SE(3) pose.
         Assumes Transform3D is a camera pose in world frame.
-        Computes angle_deg between world x and camera z axes."""
+        Computes angle between world x and camera z axes."""
         angle_deg = (
             torch.arctan2(transform.R[..., 1, 2][None], transform.R[..., 0, 2][None])
             * 180
