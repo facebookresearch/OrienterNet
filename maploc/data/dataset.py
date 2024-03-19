@@ -9,14 +9,15 @@ import torch
 import torch.utils.data as torchdata
 import torchvision.transforms as tvf
 from omegaconf import DictConfig, OmegaConf
+from scipy.spatial.transform import Rotation
 
-from ..models.utils import deg2rad, rotmat2d
+from ..models.utils import rotmat2d
 from ..osm.tiling import TileManager
 from ..utils.geo import BoundaryBox
 from ..utils.io import read_image
-from ..utils.wrappers import Camera
+from ..utils.wrappers import Camera, Transform2D, Transform3D
 from .image import pad_image, rectify_image, resize_image
-from .utils import decompose_rotmat, random_flip, random_rot90
+from .utils import random_flip, random_rot90
 
 
 class MapLocDataset(torchdata.Dataset):
@@ -126,18 +127,8 @@ class MapLocDataset(torchdata.Dataset):
         cam_dict = self.data["cameras"][scene][seq][self.data["camera_id"][idx]]
         cam = Camera.from_dict(cam_dict).float()
 
-        if "roll_pitch_yaw" in self.data:
-            roll, pitch, yaw = self.data["roll_pitch_yaw"][idx].numpy()
-        else:
-            roll, pitch, yaw = decompose_rotmat(self.data["R_c2w"][idx].numpy())
         image = read_image(self.image_dirs[scene] / (name + self.image_ext))
 
-        if "plane_params" in self.data:
-            # transform the plane parameters from world to camera frames
-            plane_w = self.data["plane_params"][idx]
-            data["ground_plane"] = torch.cat(
-                [rotmat2d(deg2rad(torch.tensor(yaw))) @ plane_w[:2], plane_w[2:]]
-            )
         if self.cfg.force_camera_height is not None:
             data["camera_height"] = torch.tensor(self.cfg.force_camera_height)
         elif "camera_height" in self.data:
@@ -145,25 +136,65 @@ class MapLocDataset(torchdata.Dataset):
 
         # raster extraction
         canvas = self.tile_managers[scene].query(bbox_tile)
-        xy_w_gt = self.data["t_c2w"][idx][:2].numpy()
-        uv_gt = canvas.to_uv(xy_w_gt)
-        uv_init = canvas.to_uv(bbox_tile.center)
         raster = canvas.raster  # C, H, W
 
-        # Map augmentations
-        heading = np.deg2rad(90 - yaw)  # fixme
-        if self.stage == "train":
-            if self.cfg.augmentation.rot90:
-                raster, uv_gt, heading = random_rot90(raster, uv_gt, heading, seed)
-            if self.cfg.augmentation.flip:
-                image, raster, uv_gt, heading = random_flip(
-                    image, raster, uv_gt, heading, seed
-                )
-        yaw = 90 - np.rad2deg(heading)  # fixme
+        world_T_cam = Transform3D.from_Rt(
+            self.data["R_c2w"][idx], self.data["t_c2w"][idx]
+        ).float()
+        world_T_cam2d = Transform2D.from_Transform3D(
+            world_T_cam
+        )  # angle is b/w world x and cam z
 
-        image, valid, cam, roll, pitch = self.process_image(
-            image, cam, roll, pitch, seed
-        )
+        # gcam: gravity-aligned camera with z=optical axis
+        # gcamxyz: gcam rotated such that z:up,x:right,y:forward.
+
+        gcam_angle = world_T_cam2d.angle - 90
+        Rz = Transform2D.from_degrees(gcam_angle, torch.zeros(2))
+        world_R_gcamxyz = torch.eye(3)
+        world_R_gcamxyz[:2, :2] = Rz.R
+        world_T_gcamxyz = Transform3D.from_Rt(world_R_gcamxyz, world_T_cam.t).float()
+        gcamxyz_T_gcam = Transform3D.from_Rt(
+            Rotation.from_euler("X", -90, degrees=True).as_matrix(), torch.zeros(3)
+        ).float()
+        world_T_gcam = world_T_gcamxyz @ gcamxyz_T_gcam
+        gcam_T_cam = world_T_gcam.inv() @ world_T_cam
+
+        world_T_tile = Transform2D.from_Rt(torch.eye(2), canvas.bbox.min_).float()
+        tile_T_cam = world_T_tile.inv() @ world_T_cam2d
+        map_T_cam = Transform2D.from_Rt(
+            tile_T_cam.R, tile_T_cam.t * canvas.ppm - 0.5
+        )  # This will be deprecated, tile_T_cam is sufficient.
+
+        world_T_init = Transform2D.from_Rt(torch.eye(2), bbox_tile.center).float()
+        tile_T_init = world_T_tile.inv() @ world_T_init
+        map_T_init = Transform2D.from_Rt(torch.eye(2), tile_T_init.t * canvas.ppm - 0.5)
+
+        yaw = tile_T_cam.angle
+
+        # Map augmentations
+        # TODO: refactor
+        # heading = np.deg2rad(90 - yaw)  # fixme
+        # if self.stage == "train":
+        #     if self.cfg.augmentation.rot90:
+        #         raster, uv_gt, heading = random_rot90(raster, uv_gt, heading, seed)
+        #     if self.cfg.augmentation.flip:
+        #         image, raster, uv_gt, heading = random_flip(
+        #             image, raster, uv_gt, heading, seed
+        #         )
+        # yaw = 90 - np.rad2deg(heading)  # fixme
+
+        cam_R_gcam = gcam_T_cam.inv().R
+        image, valid, cam = self.process_image(image, cam, seed, cam_R_gcam)
+
+        if "plane_params" in self.data:
+            # transform the plane parameters from world to camera frames
+            plane_w = self.data["plane_params"][idx]
+            data["ground_plane"] = torch.cat(
+                [
+                    Transform2D.from_degrees(90 - yaw).R @ plane_w[:2],
+                    plane_w[2:],
+                ]
+            )
 
         # Create the mask for prior location
         if self.cfg.add_map_mask:
@@ -181,8 +212,13 @@ class MapLocDataset(torchdata.Dataset):
 
         if self.cfg.return_gps:
             gps = self.data["gps_position"][idx][:2].numpy()
-            xy_gps = self.tile_managers[scene].projection.project(gps)
-            data["uv_gps"] = torch.from_numpy(canvas.to_uv(xy_gps)).float()
+            world_t_gps = self.tile_managers[scene].projection.project(gps)
+            world_t_gps = torch.from_numpy(world_t_gps).float()
+            world_T_gps = Transform2D.from_Rt(torch.eye(2), world_t_gps)
+            tile_T_gps = world_T_tile.inv() @ world_T_gps
+            data["map_T_gps"] = Transform2D.from_Rt(
+                torch.eye(2), tile_T_gps.t * canvas.ppm - 0.5
+            )
             data["accuracy_gps"] = torch.tensor(
                 min(self.cfg.accuracy_gps, self.cfg.crop_size_meters)
             )
@@ -197,25 +233,22 @@ class MapLocDataset(torchdata.Dataset):
             "camera": cam,
             "canvas": canvas,
             "map": torch.from_numpy(np.ascontiguousarray(raster)).long(),
-            "uv": torch.from_numpy(uv_gt).float(),  # TODO: maybe rename to uv?
-            "uv_init": torch.from_numpy(uv_init).float(),  # TODO: maybe rename to uv?
-            "roll_pitch_yaw": torch.tensor((roll, pitch, yaw)).float(),
+            "tile_T_cam": tile_T_cam.float(),
+            "map_T_cam": map_T_cam.float(),
+            "map_T_init": map_T_init,
             "pixels_per_meter": torch.tensor(canvas.ppm).float(),
         }
 
-    def process_image(self, image, cam, roll, pitch, seed):
+    def process_image(self, image, cam, seed, cam_R_gcam):
         image = (
             torch.from_numpy(np.ascontiguousarray(image))
             .permute(2, 0, 1)
             .float()
             .div_(255)
         )
-        image, valid = rectify_image(
-            image, cam, roll, pitch if self.cfg.rectify_pitch else None
-        )
-        roll = 0.0
-        if self.cfg.rectify_pitch:
-            pitch = 0.0
+        assert self.cfg.rectify_pitch
+        # TODO: do we need to support self.cfg.rectify_pitch?
+        image, valid = rectify_image(image, cam, cam_R_gcam)
 
         if self.cfg.target_focal_length is not None:
             # resize to a canonical focal length
@@ -251,7 +284,7 @@ class MapLocDataset(torchdata.Dataset):
         with torch.random.fork_rng(devices=[]):
             torch.manual_seed(seed)
             image = self.tfs(image)
-        return image, valid, cam, roll, pitch
+        return image, valid, cam
 
     def create_map_mask(self, canvas):
         map_mask = np.zeros(canvas.raster.shape[-2:], bool)
