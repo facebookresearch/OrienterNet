@@ -1,5 +1,7 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 
+from copy import deepcopy
+
 import numpy as np
 import torch
 from torch.nn.functional import normalize
@@ -173,11 +175,17 @@ class OrienterNet(BaseModel):
         }
 
     def loss(self, pred, data):
-        xy_gt = data["uv"]
-        yaw_gt = data["roll_pitch_yaw"][..., -1]
+
+        # TODO: refactor this function with new format.
+        # Temporarily revert to old format
+        xy_gt = deepcopy(data["map_T_cam"].t)
+        xy_gt[..., -1] = 255.0 - xy_gt[..., -1]
+        yaw_gt = 90 - data["map_T_cam"].angle.squeeze(0)
+        log_probs = pred["log_probs"]
+
         if self.conf.do_label_smoothing:
             nll = nll_loss_xyr_smoothed(
-                pred["log_probs"],
+                log_probs,
                 xy_gt,
                 yaw_gt,
                 self.conf.sigma_xy / self.conf.pixel_per_meter,
@@ -185,7 +193,7 @@ class OrienterNet(BaseModel):
                 mask=data.get("map_mask"),
             )
         else:
-            nll = nll_loss_xyr(pred["log_probs"], xy_gt, yaw_gt)
+            nll = nll_loss_xyr(log_probs, xy_gt, yaw_gt)
         loss = {"total": nll, "nll": nll}
         if self.training and self.conf.add_temperature:
             loss["temperature"] = self.temperature.expand(len(nll))
@@ -193,13 +201,17 @@ class OrienterNet(BaseModel):
 
     def metrics(self):
         return {
-            "xy_max_error": Location2DError("uv_max", self.conf.pixel_per_meter),
+            "xy_max_error": Location2DError("map_T_cam_max", self.conf.pixel_per_meter),
             "xy_expectation_error": Location2DError(
-                "uv_expectation", self.conf.pixel_per_meter
+                "map_T_cam_expectation", self.conf.pixel_per_meter
             ),
-            "yaw_max_error": AngleError("yaw_max"),
-            "xy_recall_2m": Location2DRecall(2.0, self.conf.pixel_per_meter, "uv_max"),
-            "xy_recall_5m": Location2DRecall(5.0, self.conf.pixel_per_meter, "uv_max"),
-            "yaw_recall_2°": AngleRecall(2.0, "yaw_max"),
-            "yaw_recall_5°": AngleRecall(5.0, "yaw_max"),
+            "yaw_max_error": AngleError("map_T_cam_max"),
+            "xy_recall_2m": Location2DRecall(
+                2.0, self.conf.pixel_per_meter, "map_T_cam_max"
+            ),
+            "xy_recall_5m": Location2DRecall(
+                5.0, self.conf.pixel_per_meter, "map_T_cam_max"
+            ),
+            "yaw_recall_2°": AngleRecall(2.0, "map_T_cam_max"),
+            "yaw_recall_5°": AngleRecall(5.0, "map_T_cam_max"),
         }

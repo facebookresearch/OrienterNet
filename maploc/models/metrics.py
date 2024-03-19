@@ -18,25 +18,28 @@ def angle_error(t, t_gt):
 
 
 class Location2DRecall(torchmetrics.MeanMetric):
-    def __init__(self, threshold, pixel_per_meter, key="uv_max", *args, **kwargs):
+    def __init__(
+        self, threshold, pixel_per_meter, key="map_T_cam_max", *args, **kwargs
+    ):
         self.threshold = threshold
         self.ppm = pixel_per_meter
         self.key = key
         super().__init__(*args, **kwargs)
 
     def update(self, pred, data):
-        error = location_error(pred[self.key], data["uv"], self.ppm)
+        error = location_error(pred[self.key].t, data["map_T_cam"].t, self.ppm)
         super().update((error <= self.threshold).float())
 
 
 class AngleRecall(torchmetrics.MeanMetric):
-    def __init__(self, threshold, key="yaw_max", *args, **kwargs):
+    def __init__(self, threshold, key="map_T_cam_max", *args, **kwargs):
         self.threshold = threshold
         self.key = key
         super().__init__(*args, **kwargs)
 
     def update(self, pred, data):
-        error = angle_error(pred[self.key], data["roll_pitch_yaw"][..., -1])
+        # error = angle_error(pred[self.key], data["roll_pitch_yaw"][..., -1])
+        error = angle_error(pred[self.key].angle, data["map_T_cam"].angle)
         super().update((error <= self.threshold).float())
 
 
@@ -65,7 +68,7 @@ class AngleError(MeanMetricWithRecall):
         self.key = key
 
     def update(self, pred, data):
-        value = angle_error(pred[self.key], data["roll_pitch_yaw"][..., -1])
+        value = angle_error(pred[self.key].angle, data["map_T_cam"].angle)
         if value.numel():
             self.value.append(value)
 
@@ -77,7 +80,7 @@ class Location2DError(MeanMetricWithRecall):
         self.ppm = pixel_per_meter
 
     def update(self, pred, data):
-        value = location_error(pred[self.key], data["uv"], self.ppm)
+        value = location_error(pred[self.key].t, data["map_T_cam"].t, self.ppm)
         if value.numel():
             self.value.append(value)
 
