@@ -28,53 +28,32 @@ def plot_example_single(
     show_fused=False,
     show_dir_error=False,
     show_masked_prob=False,
-    refactored_input=False,
 ):
 
-    # map_T_query (or m_T_q) is the Transform (trans and rot) of query in pixel space.
-    # map_t_query (or m_t_q) is only the translation.
-    # if refactored_input is True, then the translation is in ij format, else in uv.
-    # m_r_q (or yaw) is the rotation only. If refactored_input, then this is
-    # east-counterclockwise, else north-clockwise.
+    # map_T_cam (or m_T_c): Transform of cam in pixel space.
+    # map_t_cam (or m_t_c): only translation.
+    # m_r_c (yaw): only rotation. East-facing, counter-clockwise rotation
 
-    if refactored_input:
-        # The refactored input has rot and trans combined
-        # into a Transform2D object: map_T_query
-        scene, name, rasters, map_T_query_gt = (
-            data[k] for k in ("scene", "name", "map", "map_T_query_gt")
-        )
+    scene, name, rasters, map_T_cam_gt = (
+        data[k] for k in ("scene", "name", "map", "map_T_cam")
+    )
 
-        m_t_q_gt = map_T_query_gt.t.squeeze(0)  # ij_gt
-        yaw_gt = map_T_query_gt.angle.squeeze(0)  # m_r_q_gt
+    m_t_c_gt = map_T_cam_gt.t.squeeze(0)  # ij_gt
+    yaw_gt = map_T_cam_gt.angle.squeeze(0)  # m_r_c_gt
 
-        m_t_gps = data.get("ij_gps")
-        if show_fused and "ij_fused" in pred:
-            m_t_q_pred = pred["ij_fused"]
-            yaw_p = pred.get("yaw_fused")
-        else:
-            m_T_q_pred = pred["map_T_query_max"]
-            m_t_q_pred = m_T_q_pred.t.squeeze(0)  # ij_p
-            yaw_p = m_T_q_pred.angle.squeeze(0)  # m_r_q_pred
-
+    m_t_gps = data.get("map_T_gps").t.squeeze(0)
+    if show_fused and "ij_fused" in pred:
+        m_t_c_pred = pred["ij_fused"]
+        yaw_p = pred.get("yaw_fused")
     else:
-        # Temporary support for original formats
-        scene, name, rasters, m_t_q_gt = (
-            data[k] for k in ("scene", "name", "map", "uv")
-        )
-        yaw_gt = data["roll_pitch_yaw"][-1].numpy()  # m_r_q_gt
-        m_t_gps = data.get("uv_gps")  # uv_gps
-        if show_fused and "uv_fused" in pred:
-            m_t_q_pred = pred["uv_fused"]
-            yaw_p = pred.get("yaw_fused")
-        else:
-            m_t_q_pred = pred["uv_max"]  # uv_p
-            yaw_p = pred.get("yaw_max")  # m_r_q_pred
+        m_T_c_pred = pred["map_T_cam_max"]
+        m_t_c_pred = m_T_c_pred.t.squeeze(0)  # ij_p
+        yaw_p = m_T_c_pred.angle.squeeze(0)  # m_r_c_pred
 
     image = data["image"].permute(1, 2, 0)
     if "valid" in data:
         image = image.masked_fill(~data["valid"].unsqueeze(-1), 0.3)
 
-    # if input is not refactored, lp_ijt and lp_ij are actually lp_uvt and lp_uv
     lp_ijt = lp_ij = pred["log_probs"]
     if show_fused and "log_probs_fused" in pred:
         lp_ijt = lp_ij = pred["log_probs_fused"]
@@ -104,14 +83,14 @@ def plot_example_single(
 
     map_viz = Colormap.apply(rasters)
     overlay = likelihood_overlay(prob.numpy(), map_viz.mean(-1, keepdims=True))
-    if refactored_input:
-        map_viz, overlay, feats_map_rgb = [
-            np.swapaxes(x, 0, 1) for x in (map_viz, overlay, feats_map_rgb)
-        ]
+
+    map_viz, overlay, feats_map_rgb = [
+        np.swapaxes(x, 0, 1) for x in (map_viz, overlay, feats_map_rgb)
+    ]
     plot_images(
         [image, map_viz, overlay, feats_map_rgb],
         titles=[text1, "map", "likelihood", "neural map"],
-        origins=["upper", "lower", "lower", "lower"] if refactored_input else None,
+        origins=["upper", "lower", "lower", "lower"],
         dpi=75,
         cmaps="jet",
     )
@@ -120,14 +99,14 @@ def plot_example_single(
     axes[1].images[0].set_interpolation("none")
     axes[2].images[0].set_interpolation("none")
     Colormap.add_colorbar()
-    plot_nodes(1, rasters[2], refactored=refactored_input)
+    plot_nodes(1, rasters[2], refactored=True)
 
     if show_gps and m_t_gps is not None:
-        plot_pose([1], m_t_gps, c="blue", refactored=refactored_input)
-    plot_pose([1], m_t_q_gt, yaw_gt, c="red", refactored=refactored_input)
-    plot_pose([1], m_t_q_pred, yaw_p, c="k", refactored=refactored_input)
-    plot_dense_rotations(2, lp_ijt.exp(), refactored=refactored_input)
-    inset_center = m_t_q_pred if results["xy_max_error"] < 5 else m_t_q_gt
+        plot_pose([1], m_t_gps, c="blue", refactored=True)
+    plot_pose([1], m_t_c_gt, yaw_gt, c="red", refactored=True)
+    plot_pose([1], m_t_c_pred, yaw_p, c="k", refactored=True)
+    plot_dense_rotations(2, lp_ijt.exp(), refactored=True)
+    inset_center = m_t_c_pred if results["xy_max_error"] < 5 else m_t_c_gt
 
     # Doesn't work for refactored axes conventions
     # axins = add_circle_inset(axes[2], inset_center, refactored=True)
@@ -155,8 +134,8 @@ def plot_example_single(
             plot_images([map_viz])
             plt.gca().images[0].set_interpolation("none")
             plot_nodes(0, rasters[2])
-            plot_pose([0], m_t_q_gt, yaw_gt, c="red")
-            plot_pose([0], m_t_q_pred, yaw_p, c="k")
+            plot_pose([0], m_t_c_gt, yaw_gt, c="red")
+            plot_pose([0], m_t_c_pred, yaw_p, c="k")
             save_plot(p.format("map"))
             plt.close()
             plot_images([lp_ij], cmaps="jet")
@@ -166,7 +145,7 @@ def plot_example_single(
             plot_images([overlay])
             plt.gca().images[0].set_interpolation("none")
             axins = add_circle_inset(plt.gca(), inset_center)
-            axins.scatter(*m_t_q_gt, lw=1, c="red", ec="k", s=50)
+            axins.scatter(*m_t_c_gt, lw=1, c="red", ec="k", s=50)
             save_plot(p.format("likelihood"))
             plt.close()
             write_torch_image(
@@ -191,14 +170,12 @@ def plot_example_single(
     # feats_map_rgb, feats_q_rgb, = features_to_RGB(
     #     feats_map.numpy(), feats_q.numpy(), masks=[None, mask_bev])
     norm_map = torch.norm(feats_map, dim=0)
-    origins = None
-    if refactored_input:
-        conf_q, feats_q_rgb, norm_map = [
-            np.swapaxes(x, 0, 1) for x in [conf_q, feats_q_rgb, norm_map]
-        ]
-        if prior is not None:
-            prior = np.swapaxes(prior, 0, 1)
-        origins = ["lower", "lower", "lower"] + ([] if prior is None else ["lower"])
+    conf_q, feats_q_rgb, norm_map = [
+        np.swapaxes(x, 0, 1) for x in [conf_q, feats_q_rgb, norm_map]
+    ]
+    if prior is not None:
+        prior = np.swapaxes(prior, 0, 1)
+    origins = ["lower", "lower", "lower"] + ([] if prior is None else ["lower"])
     plot_images(
         [conf_q, feats_q_rgb, norm_map] + ([] if prior is None else [prior]),
         titles=["BEV confidence", "BEV features", "map norm"]
