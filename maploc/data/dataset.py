@@ -159,13 +159,12 @@ class MapLocDataset(torchdata.Dataset):
 
         world_T_tile = Transform2D.from_Rt(torch.eye(2), canvas.bbox.min_).float()
         tile_T_cam = world_T_tile.inv() @ world_T_cam2d
-        map_T_cam = Transform2D.from_Rt(
-            tile_T_cam.R, tile_T_cam.t * canvas.ppm - 0.5
-        )  # This will be deprecated, tile_T_cam is sufficient.
+        map_T_cam = Transform2D.to_pixels(tile_T_cam, canvas.ppm)
+        # map_T_cam will be deprecated, tile_T_cam is sufficient.
 
-        world_T_init = Transform2D.from_Rt(torch.eye(2), bbox_tile.center).float()
-        tile_T_init = world_T_tile.inv() @ world_T_init
-        map_T_init = Transform2D.from_Rt(torch.eye(2), tile_T_init.t * canvas.ppm - 0.5)
+        world_t_init = torch.from_numpy(bbox_tile.center).float()
+        tile_t_init = world_t_init - world_T_tile.t
+        map_t_init = Transform2D.to_pixels(tile_t_init, canvas.ppm)
 
         yaw = tile_T_cam.angle
 
@@ -202,11 +201,8 @@ class MapLocDataset(torchdata.Dataset):
             gps = self.data["gps_position"][idx][:2].numpy()
             world_t_gps = self.tile_managers[scene].projection.project(gps)
             world_t_gps = torch.from_numpy(world_t_gps).float()
-            world_T_gps = Transform2D.from_Rt(torch.eye(2), world_t_gps)
-            tile_T_gps = world_T_tile.inv() @ world_T_gps
-            data["map_T_gps"] = Transform2D.from_Rt(
-                torch.eye(2), tile_T_gps.t * canvas.ppm - 0.5
-            )
+            tile_t_gps = world_t_gps - world_T_tile.t
+            data["map_t_gps"] = Transform2D.to_pixels(tile_t_gps, canvas.ppm)
             data["accuracy_gps"] = torch.tensor(
                 min(self.cfg.accuracy_gps, self.cfg.crop_size_meters)
             )
@@ -223,7 +219,7 @@ class MapLocDataset(torchdata.Dataset):
             "map": torch.from_numpy(np.ascontiguousarray(raster)).long(),
             "tile_T_cam": tile_T_cam.float(),
             "map_T_cam": map_T_cam.float(),
-            "map_T_init": map_T_init,
+            "map_t_init": map_t_init,
             "pixels_per_meter": torch.tensor(canvas.ppm).float(),
         }
 
@@ -235,7 +231,6 @@ class MapLocDataset(torchdata.Dataset):
             .div_(255)
         )
         assert self.cfg.rectify_pitch
-        # TODO: do we need to support self.cfg.rectify_pitch?
         image, valid = rectify_image(image, cam, cam_R_gcam)
 
         if self.cfg.target_focal_length is not None:

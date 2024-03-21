@@ -31,7 +31,7 @@ class Location2DRecall(torchmetrics.MeanMetric):
             error = pred[self.key]
         else:
             assert self.ppm is not None
-            error = location_error(pred[self.key].t, data["map_T_cam"].t, self.ppm)
+            error = location_error(pred[self.key], data["map_T_cam"].t, self.ppm)
         super().update((error <= self.threshold).float())
 
 
@@ -45,7 +45,7 @@ class AngleRecall(torchmetrics.MeanMetric):
         if self.key[:3] == "dr_":
             error = pred[self.key]
         else:
-            error = angle_error(pred[self.key].angle, data["map_T_cam"].angle)
+            error = angle_error(pred[self.key], data["map_T_cam"].angle)
         super().update((error <= self.threshold).float())
 
 
@@ -77,7 +77,7 @@ class AngleError(MeanMetricWithRecall):
         if self.key[:3] == "dr_":
             value = pred[self.key]
         else:
-            value = angle_error(pred[self.key].angle, data["map_T_cam"].angle)
+            value = angle_error(pred[self.key], data["map_T_cam"].angle)
         if value.numel():
             self.value.append(value)
 
@@ -93,7 +93,7 @@ class Location2DError(MeanMetricWithRecall):
             value = pred[self.key]
         else:
             assert self.ppm is not None
-            value = location_error(pred[self.key].t, data["map_T_cam"].t, self.ppm)
+            value = location_error(pred[self.key], data["map_T_cam"].t, self.ppm)
         if value.numel():
             self.value.append(value)
 

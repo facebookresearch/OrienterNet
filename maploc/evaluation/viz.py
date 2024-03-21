@@ -41,7 +41,7 @@ def plot_example_single(
     m_t_c_gt = map_T_cam_gt.t.squeeze(0)  # ij_gt
     yaw_gt = map_T_cam_gt.angle.squeeze(0)  # m_r_c_gt
 
-    m_t_gps = data.get("map_T_gps").t.squeeze(0)
+    m_t_gps = data.get("map_t_gps").squeeze(0)
     if show_fused and "ij_fused" in pred:
         m_t_c_pred = pred["ij_fused"]
         yaw_p = pred.get("yaw_fused")

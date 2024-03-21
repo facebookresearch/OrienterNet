@@ -255,6 +255,24 @@ class Transform2D(TensorWrapper):
         return cls.from_degrees(angle_deg, transform.t[..., :2])
 
     @classmethod
+    def to_pixels(cls, transform: Union["Transform2D", torch.Tensor], ppm):
+        if isinstance(transform, cls):
+            ij = transform.t * ppm - 0.5
+            return cls.from_degrees(transform.angle, ij)
+        else:
+            ij = transform * ppm - 0.5
+            return ij
+
+    @classmethod
+    def from_pixels(cls, transform: Union["Transform2D", torch.Tensor], ppm):
+        if isinstance(transform, cls):
+            xy = (transform.t + 0.5) / ppm
+            return cls.from_degrees(transform.angle, xy)
+        else:
+            xy = (transform + 0.5) / ppm
+            return xy
+
+    @classmethod
     def from_Transform3D(cls, transform: "Transform3D"):
         """SE(2) pose from an SE(3) pose."""
         angle_deg = torch.rad2deg(
