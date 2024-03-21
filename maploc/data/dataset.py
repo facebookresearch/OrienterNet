@@ -141,9 +141,7 @@ class MapLocDataset(torchdata.Dataset):
         world_T_cam = Transform3D.from_Rt(
             self.data["R_c2w"][idx], self.data["t_c2w"][idx]
         ).float()
-        world_T_cam2d = Transform2D.from_Transform3D(
-            world_T_cam
-        )  # angle is b/w world x and cam z
+        world_T_cam2d = Transform2D.camera_2d_from_3d(world_T_cam)
 
         # gcam: gravity-aligned camera with z=optical axis
         # gcamxyz: gcam rotated such that z:up,x:right,y:forward.

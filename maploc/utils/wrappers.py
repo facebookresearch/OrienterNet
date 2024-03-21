@@ -11,7 +11,6 @@ Based on PyTorch tensors: differentiable, batched, with GPU support.
 
 import functools
 import inspect
-import math
 from typing import Dict, List, NamedTuple, Tuple, Union
 
 import numpy as np
@@ -175,9 +174,7 @@ class Transform3D(TensorWrapper):
         Args:
             p3d: 3D points, numpy array or PyTorch tensor with shape (..., 3).
         """
-        assert (
-            p3d.shape[-1] == 3
-        )  # assert p3d.shape[:-2] == self.shape  # allow broadcasting
+        assert p3d.shape[-1] == 3
         return p3d @ self.R.transpose(-1, -2) + self.t.unsqueeze(-2)
 
     def __matmul__(
@@ -201,7 +198,7 @@ class Transform3D(TensorWrapper):
         """
         trace = torch.diagonal(self.R, dim1=-1, dim2=-2).sum(-1)
         cos = torch.clamp((trace - 1) / 2, -1, 1)
-        dr = torch.acos(cos).abs() / math.pi * 180
+        dr = torch.rad2deg(torch.acos(cos).abs())
         dt = torch.norm(self.t, dim=-1)
         return dr, dt
 
@@ -245,18 +242,23 @@ class Transform2D(TensorWrapper):
         assert R.shape[-2:] == (2, 2)
         assert t.shape[-1] == 2
         assert R.shape[:-2] == t.shape[:-1]
-        angle_deg = torch.arctan2(R[..., 1, 0], R[..., 0, 0]) * 180 / math.pi
+        angle_deg = torch.rad2deg(torch.arctan2(R[..., 1, 0], R[..., 0, 0]))
         return cls.from_degrees(angle_deg[None], t[..., :2])
 
     @classmethod
-    def from_Transform3D(cls, transform: "Transform3D"):
+    def camera_2d_from_3d(cls, transform: "Transform3D"):
         """SE(2) pose from an SE(3) pose.
-        Assumes Transform3D is a camera pose in world frame.
-        Computes angle between world x and camera z axes."""
-        angle_deg = (
+        Computes yaw as angle between x-axis and camera's z-axis."""
+        angle_deg = torch.rad2deg(
             torch.arctan2(transform.R[..., 1, 2][None], transform.R[..., 0, 2][None])
-            * 180
-            / math.pi
+        )
+        return cls.from_degrees(angle_deg, transform.t[..., :2])
+
+    @classmethod
+    def from_Transform3D(cls, transform: "Transform3D"):
+        """SE(2) pose from an SE(3) pose."""
+        angle_deg = torch.rad2deg(
+            torch.arctan2(transform.R[..., 1, 0][None], transform.R[..., 0, 0][None])
         )
         return cls.from_degrees(angle_deg, transform.t[..., :2])
 
