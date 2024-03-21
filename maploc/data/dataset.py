@@ -184,16 +184,6 @@ class MapLocDataset(torchdata.Dataset):
         cam_R_gcam = gcam_T_cam.inv().R
         image, valid, cam = self.process_image(image, cam, seed, cam_R_gcam)
 
-        if "plane_params" in self.data:
-            # transform the plane parameters from world to camera frames
-            plane_w = self.data["plane_params"][idx]
-            data["ground_plane"] = torch.cat(
-                [
-                    Transform2D.from_degrees(90 - yaw).R @ plane_w[:2],
-                    plane_w[2:],
-                ]
-            )
-
         # Create the mask for prior location
         if self.cfg.add_map_mask:
             data["map_mask"] = torch.from_numpy(self.create_map_mask(canvas))
