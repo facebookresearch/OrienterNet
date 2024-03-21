@@ -17,7 +17,7 @@ from ..utils.geo import BoundaryBox
 from ..utils.io import read_image
 from ..utils.wrappers import Camera, Transform2D, Transform3D
 from .image import pad_image, rectify_image, resize_image
-from .utils import random_flip, random_rot90
+from .utils import compose_rotmat, decompose_rotmat, random_flip, random_rot90
 
 
 class MapLocDataset(torchdata.Dataset):
@@ -127,6 +127,14 @@ class MapLocDataset(torchdata.Dataset):
         cam_dict = self.data["cameras"][scene][seq][self.data["camera_id"][idx]]
         cam = Camera.from_dict(cam_dict).float()
 
+        # for backward compatibility
+        if "roll_pitch_yaw" in self.data:
+            R_c2w = compose_rotmat(*self.data["roll_pitch_yaw"][idx].numpy())
+        else:
+            R_c2w = self.data["R_c2w"][idx].numpy()
+
+        t_c2w = self.data["t_c2w"][idx].numpy()
+
         image = read_image(self.image_dirs[scene] / (name + self.image_ext))
 
         if self.cfg.force_camera_height is not None:
@@ -137,10 +145,7 @@ class MapLocDataset(torchdata.Dataset):
         # raster extraction
         canvas = self.tile_managers[scene].query(bbox_tile)
         raster = canvas.raster  # C, H, W
-
-        world_T_cam = Transform3D.from_Rt(
-            self.data["R_c2w"][idx], self.data["t_c2w"][idx]
-        ).float()
+        world_T_cam = Transform3D.from_Rt(R_c2w, t_c2w).float()
         world_T_cam2d = Transform2D.camera_2d_from_3d(world_T_cam)
 
         # gcam: gravity-aligned camera with z=optical axis
@@ -156,6 +161,7 @@ class MapLocDataset(torchdata.Dataset):
         ).float()
         world_T_gcam = world_T_gcamxyz @ gcamxyz_T_gcam
         gcam_T_cam = world_T_gcam.inv() @ world_T_cam
+        cam_R_gcam = gcam_T_cam.inv().R
 
         world_T_tile = Transform2D.from_Rt(torch.eye(2), canvas.bbox.min_).float()
         tile_T_cam = world_T_tile.inv() @ world_T_cam2d
@@ -180,7 +186,6 @@ class MapLocDataset(torchdata.Dataset):
         #         )
         # yaw = 90 - np.rad2deg(heading)  # fixme
 
-        cam_R_gcam = gcam_T_cam.inv().R
         image, valid, cam = self.process_image(image, cam, seed, cam_R_gcam)
 
         # Create the mask for prior location

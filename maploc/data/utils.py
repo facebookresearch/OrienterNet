@@ -56,3 +56,10 @@ def decompose_rotmat(R_c2w):
     roll, pitch, yaw = rot_w2c.as_euler("YXZ", degrees=True)
     # R_plane2c = Rotation.from_euler("ZX", [roll, pitch], degrees=True).as_matrix()
     return roll, pitch, yaw
+
+
+def compose_rotmat(roll, pitch, yaw):
+    rot_w2c = Rotation.from_euler("YXZ", angles=[roll, pitch, yaw], degrees=True)
+    R_xyz2cv = Rotation.from_euler("X", 90, degrees=True)
+    R_w2c = R_xyz2cv * rot_w2c
+    return R_w2c.inv().as_matrix()
