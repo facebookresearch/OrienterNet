@@ -17,7 +17,7 @@ from ..utils.geo import BoundaryBox
 from ..utils.io import read_image
 from ..utils.wrappers import Camera, Transform2D, Transform3D
 from .image import pad_image, rectify_image, resize_image
-from .utils import compose_rotmat, decompose_rotmat, random_flip, random_rot90
+from .utils import compose_rotmat, random_flip, random_rot90
 
 
 class MapLocDataset(torchdata.Dataset):
@@ -105,8 +105,8 @@ class MapLocDataset(torchdata.Dataset):
 
         if "shifts" in self.data:
             yaw = self.data["roll_pitch_yaw"][idx][-1]
-            R_c2w = rotmat2d((90 - yaw) / 180 * np.pi).float()
-            error = (R_c2w @ self.data["shifts"][idx][:2]).numpy()
+            world_R_cam = rotmat2d(np.deg2rad((90 - yaw))).float()
+            error = (world_R_cam @ self.data["shifts"][idx][:2]).numpy()
         else:
             error = np.random.RandomState(seed).uniform(-1, 1, size=2)
         xy_w_init += error * self.cfg.max_init_error
@@ -129,11 +129,11 @@ class MapLocDataset(torchdata.Dataset):
 
         # for backward compatibility
         if "roll_pitch_yaw" in self.data:
-            R_c2w = compose_rotmat(*self.data["roll_pitch_yaw"][idx].numpy())
+            world_R_cam = compose_rotmat(*self.data["roll_pitch_yaw"][idx].numpy())
         else:
-            R_c2w = self.data["R_c2w"][idx].numpy()
+            world_R_cam = self.data["R_c2w"][idx].numpy()
 
-        t_c2w = self.data["t_c2w"][idx].numpy()
+        world_t_cam = self.data["t_c2w"][idx].numpy()
 
         image = read_image(self.image_dirs[scene] / (name + self.image_ext))
 
@@ -145,7 +145,8 @@ class MapLocDataset(torchdata.Dataset):
         # raster extraction
         canvas = self.tile_managers[scene].query(bbox_tile)
         raster = canvas.raster  # C, H, W
-        world_T_cam = Transform3D.from_Rt(R_c2w, t_c2w).float()
+        raster = torch.from_numpy(np.ascontiguousarray(raster)).long()
+        world_T_cam = Transform3D.from_Rt(world_R_cam, world_t_cam).float()
         world_T_cam2d = Transform2D.camera_2d_from_3d(world_T_cam)
 
         # gcam: gravity-aligned camera with z=optical axis
@@ -165,28 +166,23 @@ class MapLocDataset(torchdata.Dataset):
 
         world_T_tile = Transform2D.from_Rt(torch.eye(2), canvas.bbox.min_).float()
         tile_T_cam = world_T_tile.inv() @ world_T_cam2d
+
+        image, valid, cam = self.process_image(image, cam, seed, cam_R_gcam)
+
+        # Map augmentations
+        if self.stage == "train":
+            if self.cfg.augmentation.rot90:
+                raster, tile_T_cam = random_rot90(raster, tile_T_cam, canvas.ppm)
+            if self.cfg.augmentation.flip:
+                image, valid, raster, tile_T_cam = random_flip(
+                    image, valid, raster, tile_T_cam, canvas.ppm
+                )
         map_T_cam = Transform2D.to_pixels(tile_T_cam, canvas.ppm)
         # map_T_cam will be deprecated, tile_T_cam is sufficient.
 
         world_t_init = torch.from_numpy(bbox_tile.center).float()
         tile_t_init = world_t_init - world_T_tile.t
         map_t_init = Transform2D.to_pixels(tile_t_init, canvas.ppm)
-
-        yaw = tile_T_cam.angle
-
-        # Map augmentations
-        # TODO: refactor
-        # heading = np.deg2rad(90 - yaw)  # fixme
-        # if self.stage == "train":
-        #     if self.cfg.augmentation.rot90:
-        #         raster, uv_gt, heading = random_rot90(raster, uv_gt, heading, seed)
-        #     if self.cfg.augmentation.flip:
-        #         image, raster, uv_gt, heading = random_flip(
-        #             image, raster, uv_gt, heading, seed
-        #         )
-        # yaw = 90 - np.rad2deg(heading)  # fixme
-
-        image, valid, cam = self.process_image(image, cam, seed, cam_R_gcam)
 
         # Create the mask for prior location
         if self.cfg.add_map_mask:
@@ -198,7 +194,7 @@ class MapLocDataset(torchdata.Dataset):
             else:
                 error = np.random.RandomState(seed + 1).uniform(-1, 1)
                 error = torch.tensor(error, dtype=torch.float)
-            yaw_init = yaw + error * self.cfg.max_init_error_rotation
+            yaw_init = tile_T_cam.angle + error * self.cfg.max_init_error_rotation
             range_ = self.cfg.prior_range_rotation or self.cfg.max_init_error_rotation
             data["yaw_prior"] = torch.stack([yaw_init, torch.tensor(range_)])
 
@@ -221,7 +217,7 @@ class MapLocDataset(torchdata.Dataset):
             "valid": valid,
             "camera": cam,
             "canvas": canvas,
-            "map": torch.from_numpy(np.ascontiguousarray(raster)).long(),
+            "map": raster,
             "tile_T_cam": tile_T_cam.float(),
             "map_T_cam": map_T_cam.float(),
             "map_t_init": map_t_init,

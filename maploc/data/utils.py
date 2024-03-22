@@ -1,7 +1,10 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 
 import numpy as np
+import torch
 from scipy.spatial.transform import Rotation
+
+from maploc.utils.wrappers import Transform2D
 
 
 def crop_map(raster, xy, size, seed=None):
@@ -14,40 +17,56 @@ def crop_map(raster, xy, size, seed=None):
     return raster, xy
 
 
-def random_rot90(raster, xy, heading, seed=None):
+def random_rot90(
+    raster: torch.Tensor,
+    tile_T_cam: Transform2D,
+    pixels_per_meter: float,
+    seed: int = None,
+):
     rot = np.random.RandomState(seed).randint(0, 4)
-    heading = (heading + rot * np.pi / 2) % (2 * np.pi)
-    h, w = raster.shape[-2:]
-    if rot == 0:
-        xy2 = xy
-    elif rot == 2:
-        xy2 = np.array([w, h]) - 1 - xy
-    elif rot == 1:
-        xy2 = np.array([xy[1], w - 1 - xy[0]])
-    elif rot == 3:
-        xy2 = np.array([h - 1 - xy[1], xy[0]])
-    else:
-        raise ValueError(rot)
-    raster = np.rot90(raster, rot, axes=(-2, -1))
-    return raster, xy2, heading
+    raster = torch.rot90(raster, rot, dims=(-2, -1))
+
+    # Rotate the camera position around tile's center
+    map_t_center = np.array(raster.shape[-2:]) / 2.0
+    tile_t_center = Transform2D.from_pixels(map_t_center, pixels_per_meter)
+    center_t_cam = tile_T_cam.t - tile_t_center
+    R = Transform2D.from_degrees(torch.Tensor([rot * 90]), torch.zeros(2)).float()
+    center_t_rotcam = R @ center_t_cam.T.float()
+    tile_t_rotcam = center_t_rotcam.squeeze(0) + tile_t_center
+    tile_r_rotcam = (tile_T_cam.angle + rot * 90) % 360
+    tile_T_rotcam = Transform2D.from_degrees(tile_r_rotcam, tile_t_rotcam)
+    return raster, tile_T_rotcam
 
 
-def random_flip(image, raster, xy, heading, seed=None):
+def random_flip(
+    image: torch.Tensor,
+    valid: torch.Tensor,
+    raster: torch.Tensor,
+    tile_T_cam: Transform2D,
+    pixels_per_meter: float,
+    seed: int = None,
+):
     state = np.random.RandomState(seed)
     if state.rand() > 0.5:  # no flip
-        return image, raster, xy, heading
-    image = image[:, ::-1]
-    h, w = raster.shape[-2:]
+        return image, valid, raster, tile_T_cam
+
+    image = torch.flip(image, (-1,))
+    valid = torch.flip(valid, (-1,))
+
+    map_t_center = np.array(raster.shape[-2:]) / 2.0
+    tile_t_center = Transform2D.from_pixels(map_t_center, pixels_per_meter)
+    center_t_cam = tile_T_cam.t - tile_t_center
     if state.rand() > 0.5:  # flip x
-        raster = raster[..., :, ::-1]
-        xy = np.array([w - 1 - xy[0], xy[1]])
-        heading = np.pi - heading
+        raster = torch.flip(raster, (-1,))
+        tile_r_flipcam = 180 - tile_T_cam.angle
+        center_t_flipcam = center_t_cam * torch.tensor([-1, 1])
     else:  # flip y
-        raster = raster[..., ::-1, :]
-        xy = np.array([xy[0], h - 1 - xy[1]])
-        heading = -heading
-    heading = heading % (2 * np.pi)
-    return image, raster, xy, heading
+        tile_r_flipcam = -tile_T_cam.angle
+        raster = torch.flip(raster, (-2,))
+        center_t_flipcam = center_t_cam * torch.tensor([1, -1])
+    tile_t_flipcam = center_t_flipcam + tile_t_center
+    tile_T_flipcam = Transform2D.from_degrees(tile_r_flipcam % 360, tile_t_flipcam)
+    return image, valid, raster, tile_T_flipcam
 
 
 def decompose_rotmat(R_c2w):
