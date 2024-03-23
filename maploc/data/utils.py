@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from scipy.spatial.transform import Rotation
 
-from maploc.utils.wrappers import Transform2D
+from maploc.utils.wrappers import Transform2D, Transform3D
 
 
 def crop_map(raster, xy, size, seed=None):
@@ -82,3 +82,30 @@ def compose_rotmat(roll, pitch, yaw):
     R_xyz2cv = Rotation.from_euler("X", 90, degrees=True)
     R_w2c = R_xyz2cv * rot_w2c
     return R_w2c.inv().as_matrix()
+
+
+def decompose_cam_into_gcam(world_T_cam):
+    """Returns gravity-aligned cam's pose in world and camera frame"""
+
+    # gcam: gravity-aligned camera with z=optical axis
+    # gcamxyz: gcam rotated such that z:up,x:right,y:forward.
+
+    # Get yaw: angle between x-axis and camera's z-axis
+    yaw = Transform2D.camera_2d_from_3d(world_T_cam).angle
+
+    gcamxyz_angle = yaw - 90
+    Rz = Transform2D.from_degrees(gcamxyz_angle, torch.zeros(2))
+    world_R_gcamxyz = torch.eye(3)
+    world_R_gcamxyz[:2, :2] = Rz.R
+    world_T_gcamxyz = Transform3D.from_Rt(world_R_gcamxyz, world_T_cam.t)
+
+    gcamxyz_T_gcam = Transform3D.from_Rt(
+        Rotation.from_euler("X", -90, degrees=True).as_matrix(), torch.zeros(3)
+    )
+
+    world_T_gcam = world_T_gcamxyz @ gcamxyz_T_gcam
+
+    cam_T_gcam = world_T_cam.inv() @ world_T_gcam
+    cam_R_gcam = cam_T_gcam.R
+
+    return world_T_gcam, cam_R_gcam

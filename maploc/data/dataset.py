@@ -9,7 +9,6 @@ import torch
 import torch.utils.data as torchdata
 import torchvision.transforms as tvf
 from omegaconf import DictConfig, OmegaConf
-from scipy.spatial.transform import Rotation
 
 from ..models.utils import rotmat2d
 from ..osm.tiling import TileManager
@@ -17,7 +16,7 @@ from ..utils.geo import BoundaryBox
 from ..utils.io import read_image
 from ..utils.wrappers import Camera, Transform2D, Transform3D
 from .image import pad_image, rectify_image, resize_image
-from .utils import compose_rotmat, random_flip, random_rot90
+from .utils import compose_rotmat, decompose_cam_into_gcam, random_flip, random_rot90
 
 
 class MapLocDataset(torchdata.Dataset):
@@ -149,20 +148,7 @@ class MapLocDataset(torchdata.Dataset):
         world_T_cam = Transform3D.from_Rt(world_R_cam, world_t_cam)
         world_T_cam2d = Transform2D.camera_2d_from_3d(world_T_cam)
 
-        # gcam: gravity-aligned camera with z=optical axis
-        # gcamxyz: gcam rotated such that z:up,x:right,y:forward.
-
-        gcam_angle = world_T_cam2d.angle - 90
-        Rz = Transform2D.from_degrees(gcam_angle, torch.zeros(2))
-        world_R_gcamxyz = torch.eye(3)
-        world_R_gcamxyz[:2, :2] = Rz.R
-        world_T_gcamxyz = Transform3D.from_Rt(world_R_gcamxyz, world_T_cam.t)
-        gcamxyz_T_gcam = Transform3D.from_Rt(
-            Rotation.from_euler("X", -90, degrees=True).as_matrix(), torch.zeros(3)
-        )
-        world_T_gcam = world_T_gcamxyz @ gcamxyz_T_gcam
-        gcam_T_cam = (world_T_gcam.inv() @ world_T_cam).float()
-        cam_R_gcam = gcam_T_cam.inv().R
+        _, cam_R_gcam = decompose_cam_into_gcam(world_T_cam)
 
         world_T_tile = Transform2D.from_Rt(torch.eye(2), canvas.bbox.min_)
         tile_T_cam = (world_T_tile.inv() @ world_T_cam2d).float()
