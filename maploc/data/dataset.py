@@ -146,7 +146,7 @@ class MapLocDataset(torchdata.Dataset):
         canvas = self.tile_managers[scene].query(bbox_tile)
         raster = canvas.raster  # C, H, W
         raster = torch.from_numpy(np.ascontiguousarray(raster)).long()
-        world_T_cam = Transform3D.from_Rt(world_R_cam, world_t_cam).float()
+        world_T_cam = Transform3D.from_Rt(world_R_cam, world_t_cam)
         world_T_cam2d = Transform2D.camera_2d_from_3d(world_T_cam)
 
         # gcam: gravity-aligned camera with z=optical axis
@@ -156,16 +156,16 @@ class MapLocDataset(torchdata.Dataset):
         Rz = Transform2D.from_degrees(gcam_angle, torch.zeros(2))
         world_R_gcamxyz = torch.eye(3)
         world_R_gcamxyz[:2, :2] = Rz.R
-        world_T_gcamxyz = Transform3D.from_Rt(world_R_gcamxyz, world_T_cam.t).float()
+        world_T_gcamxyz = Transform3D.from_Rt(world_R_gcamxyz, world_T_cam.t)
         gcamxyz_T_gcam = Transform3D.from_Rt(
             Rotation.from_euler("X", -90, degrees=True).as_matrix(), torch.zeros(3)
-        ).float()
+        )
         world_T_gcam = world_T_gcamxyz @ gcamxyz_T_gcam
-        gcam_T_cam = world_T_gcam.inv() @ world_T_cam
+        gcam_T_cam = (world_T_gcam.inv() @ world_T_cam).float()
         cam_R_gcam = gcam_T_cam.inv().R
 
-        world_T_tile = Transform2D.from_Rt(torch.eye(2), canvas.bbox.min_).float()
-        tile_T_cam = world_T_tile.inv() @ world_T_cam2d
+        world_T_tile = Transform2D.from_Rt(torch.eye(2), canvas.bbox.min_)
+        tile_T_cam = (world_T_tile.inv() @ world_T_cam2d).float()
 
         image, valid, cam = self.process_image(image, cam, seed, cam_R_gcam)
 
@@ -180,8 +180,8 @@ class MapLocDataset(torchdata.Dataset):
         map_T_cam = Transform2D.to_pixels(tile_T_cam, canvas.ppm)
         # map_T_cam will be deprecated, tile_T_cam is sufficient.
 
-        world_t_init = torch.from_numpy(bbox_tile.center).float()
-        tile_t_init = world_t_init - world_T_tile.t
+        world_t_init = torch.from_numpy(bbox_tile.center)
+        tile_t_init = (world_t_init - world_T_tile.t).float()
         map_t_init = Transform2D.to_pixels(tile_t_init, canvas.ppm)
 
         # Create the mask for prior location
@@ -201,8 +201,8 @@ class MapLocDataset(torchdata.Dataset):
         if self.cfg.return_gps:
             gps = self.data["gps_position"][idx][:2].numpy()
             world_t_gps = self.tile_managers[scene].projection.project(gps)
-            world_t_gps = torch.from_numpy(world_t_gps).float()
-            tile_t_gps = world_t_gps - world_T_tile.t
+            world_t_gps = torch.from_numpy(world_t_gps)
+            tile_t_gps = (world_t_gps - world_T_tile.t).float()
             data["map_t_gps"] = Transform2D.to_pixels(tile_t_gps, canvas.ppm)
             data["accuracy_gps"] = torch.tensor(
                 min(self.cfg.accuracy_gps, self.cfg.crop_size_meters)
@@ -218,8 +218,8 @@ class MapLocDataset(torchdata.Dataset):
             "camera": cam,
             "canvas": canvas,
             "map": raster,
-            "tile_T_cam": tile_T_cam.float(),
-            "map_T_cam": map_T_cam.float(),
+            "tile_T_cam": tile_T_cam,
+            "map_T_cam": map_T_cam,
             "map_t_init": map_t_init,
             "pixels_per_meter": torch.tensor(canvas.ppm).float(),
         }
