@@ -163,12 +163,12 @@ class MapLocDataset(torchdata.Dataset):
                 image, valid, raster, tile_T_cam = random_flip(
                     image, valid, raster, tile_T_cam, canvas.ppm
                 )
-        map_T_cam = Transform2D.to_pixels(tile_T_cam, canvas.ppm)
+        map_T_cam = Transform2D.to_pixels(tile_T_cam, 1 / canvas.ppm)
         # map_T_cam will be deprecated, tile_T_cam is sufficient.
 
         world_t_init = torch.from_numpy(bbox_tile.center)
         tile_t_init = (world_t_init - world_T_tile.t).float()
-        map_t_init = Transform2D.to_pixels(tile_t_init, canvas.ppm)
+        map_t_init = Transform2D.to_pixels(tile_t_init, 1 / canvas.ppm)
 
         # Create the mask for prior location
         if self.cfg.add_map_mask:
@@ -189,7 +189,7 @@ class MapLocDataset(torchdata.Dataset):
             world_t_gps = self.tile_managers[scene].projection.project(gps)
             world_t_gps = torch.from_numpy(world_t_gps)
             tile_t_gps = (world_t_gps - world_T_tile.t).float()
-            data["map_t_gps"] = Transform2D.to_pixels(tile_t_gps, canvas.ppm)
+            data["map_t_gps"] = Transform2D.to_pixels(tile_t_gps, 1 / canvas.ppm)
             data["accuracy_gps"] = torch.tensor(
                 min(self.cfg.accuracy_gps, self.cfg.crop_size_meters)
             )

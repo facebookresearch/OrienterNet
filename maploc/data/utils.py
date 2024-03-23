@@ -28,7 +28,7 @@ def random_rot90(
 
     # Rotate the camera position around tile's center
     map_t_center = np.array(raster.shape[-2:]) / 2.0
-    tile_t_center = Transform2D.from_pixels(map_t_center, pixels_per_meter)
+    tile_t_center = Transform2D.from_pixels(map_t_center, 1 / pixels_per_meter)
     center_t_cam = tile_T_cam.t - tile_t_center
     R = Transform2D.from_degrees(torch.Tensor([rot * 90]), torch.zeros(2)).float()
     center_t_rotcam = R @ center_t_cam.T.float()
@@ -54,7 +54,7 @@ def random_flip(
     valid = torch.flip(valid, (-1,))
 
     map_t_center = np.array(raster.shape[-2:]) / 2.0
-    tile_t_center = Transform2D.from_pixels(map_t_center, pixels_per_meter)
+    tile_t_center = Transform2D.from_pixels(map_t_center, 1 / pixels_per_meter)
     center_t_cam = tile_T_cam.t - tile_t_center
     if state.rand() > 0.5:  # flip x
         raster = torch.flip(raster, (-1,))

@@ -255,21 +255,25 @@ class Transform2D(TensorWrapper):
         return cls.from_degrees(angle_deg, transform.t[..., :2])
 
     @classmethod
-    def to_pixels(cls, transform: Union["Transform2D", torch.Tensor], ppm):
+    def to_pixels(
+        cls, transform: Union["Transform2D", torch.Tensor], resolution: float
+    ) -> Union["Transform2D", torch.Tensor]:
         if isinstance(transform, cls):
-            ij = transform.t * ppm - 0.5
+            ij = transform.t / resolution - 0.5
             return cls.from_degrees(transform.angle, ij)
         else:
-            ij = transform * ppm - 0.5
+            ij = transform / resolution - 0.5
             return ij
 
     @classmethod
-    def from_pixels(cls, transform: Union["Transform2D", torch.Tensor], ppm):
+    def from_pixels(
+        cls, transform: Union["Transform2D", torch.Tensor], resolution: float
+    ) -> Union["Transform2D", torch.Tensor]:
         if isinstance(transform, cls):
-            xy = (transform.t + 0.5) / ppm
+            xy = (transform.t + 0.5) * resolution
             return cls.from_degrees(transform.angle, xy)
         else:
-            xy = (transform + 0.5) / ppm
+            xy = (transform + 0.5) * resolution
             return xy
 
     @classmethod
