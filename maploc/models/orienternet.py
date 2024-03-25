@@ -1,10 +1,10 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 
-from copy import deepcopy
-
 import numpy as np
 import torch
 from torch.nn.functional import normalize
+
+from maploc.utils.wrappers import Transform2D
 
 from . import get_model
 from .base import BaseModel
@@ -154,21 +154,43 @@ class OrienterNet(BaseModel):
             scores.masked_fill_(~data["map_mask"][..., None], -np.inf)
         if "yaw_prior" in data:
             mask_yaw_prior(scores, data["yaw_prior"], self.conf.num_rotations)
+
+        # Refactor model output
+
+        # note: data["map"]'s memory layout is different from its spatial layout.
+
+        # spatial to memory layout
+        pred["bev"]["output"] = torch.rot90(pred["bev"]["output"], -1, dims=(-2, -1))
+        pred["bev"]["confidence"] = torch.rot90(
+            pred["bev"]["confidence"], -1, dims=(-2, -1)
+        )
+        f_bev = torch.rot90(f_bev, -1, dims=(-2, -1))
+        valid_bev = torch.rot90(valid_bev, -1, dims=(-2, -1))
+
+        # yaw to east-counterclockwise
+        scores = torch.flip(scores, [-1])
+        scores = torch.roll(scores, 181, -1)
         log_probs = log_softmax_spatial(scores)
+
+        # these uv indices are wrt memory layout
         with torch.no_grad():
             uvr_max = argmax_xyr(scores).to(scores)
             uvr_avg, _ = expectation_xyr(log_probs.exp())
 
+        ij_max = torch.flip(uvr_max[..., :2], [-1])
+        ij_avg = torch.flip(uvr_avg[..., :2], [-1])
+        yaw_max = uvr_max[..., 2][None]
+        yaw_avg = uvr_avg[..., 2][None]
+
+        map_T_cam_max = Transform2D.from_degrees(yaw_max, ij_max)
+        map_T_cam_avg = Transform2D.from_degrees(yaw_avg, ij_avg)
+
         return {
             **pred,
+            "map_T_cam_max": map_T_cam_max,
+            "map_T_cam_expectation": map_T_cam_avg,
             "scores": scores,
             "log_probs": log_probs,
-            "uvr_max": uvr_max,
-            "uv_max": uvr_max[..., :2],
-            "yaw_max": uvr_max[..., 2],
-            "uvr_expectation": uvr_avg,
-            "uv_expectation": uvr_avg[..., :2],
-            "yaw_expectation": uvr_avg[..., 2],
             "features_image": f_image,
             "features_bev": f_bev,
             "valid_bev": valid_bev.squeeze(1),
@@ -176,24 +198,22 @@ class OrienterNet(BaseModel):
 
     def loss(self, pred, data):
 
-        # TODO: refactor this function with new format.
-        # Temporarily revert to old format
-        xy_gt = deepcopy(data["map_T_cam"].t)
-        xy_gt[..., -1] = 255.0 - xy_gt[..., -1]
-        yaw_gt = 90 - data["map_T_cam"].angle.squeeze(0)
+        ij_gt = data["map_T_cam"].t
+        uv_gt = torch.flip(ij_gt, [-1])  # in rotated raster map
+        yaw_gt = data["map_T_cam"].angle.squeeze(0)
         log_probs = pred["log_probs"]
 
         if self.conf.do_label_smoothing:
             nll = nll_loss_xyr_smoothed(
                 log_probs,
-                xy_gt,
+                uv_gt,
                 yaw_gt,
                 self.conf.sigma_xy / self.conf.pixel_per_meter,
                 self.conf.sigma_r,
                 mask=data.get("map_mask"),
             )
         else:
-            nll = nll_loss_xyr(log_probs, xy_gt, yaw_gt)
+            nll = nll_loss_xyr(log_probs, uv_gt, yaw_gt)
         loss = {"total": nll, "nll": nll}
         if self.training and self.conf.add_temperature:
             loss["temperature"] = self.temperature.expand(len(nll))

@@ -166,13 +166,17 @@ class MapLocDataset(torchdata.Dataset):
         map_T_cam = Transform2D.to_pixels(tile_T_cam, 1 / canvas.ppm)
         # map_T_cam will be deprecated, tile_T_cam is sufficient.
 
+        # Spatial to memory layout
+        raster = torch.rot90(raster, -1, dims=(-2, -1))
+
         world_t_init = torch.from_numpy(bbox_tile.center)
         tile_t_init = (world_t_init - world_T_tile.t).float()
         map_t_init = Transform2D.to_pixels(tile_t_init, 1 / canvas.ppm)
 
         # Create the mask for prior location
         if self.cfg.add_map_mask:
-            data["map_mask"] = torch.from_numpy(self.create_map_mask(canvas))
+            map_mask = torch.from_numpy(self.create_map_mask(canvas))
+            data["map_mask"] = torch.rot90(map_mask, -1, dims=(-2, -1))
 
         if self.cfg.max_init_error_rotation is not None:
             if "shifts" in self.data:

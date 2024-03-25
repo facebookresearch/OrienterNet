@@ -92,8 +92,6 @@ def plot_dense_rotations(
 ):
     t = torch.argmax(prob, -1)
     yaws = t.numpy() / prob.shape[-1] * 360
-    if refactored:
-        yaws = 90 - yaws
     prob = prob.max(-1).values / prob.max()
     mask = prob > thresh
     masked = prob.masked_fill(~mask, 0)
