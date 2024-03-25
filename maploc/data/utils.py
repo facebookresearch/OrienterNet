@@ -1,5 +1,7 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 
+from typing import Tuple
+
 import numpy as np
 import torch
 from scipy.spatial.transform import Rotation
@@ -15,7 +17,6 @@ def crop_map(raster, xy, size, seed=None):
     raster = raster[..., top : top + size, left : left + size]
     xy -= np.array([left, top])
     return raster, xy
-
 
 def random_rot90(
     raster: torch.Tensor,
@@ -84,7 +85,9 @@ def compose_rotmat(roll, pitch, yaw):
     return R_w2c.inv().as_matrix()
 
 
-def decompose_cam_into_gcam(world_T_cam):
+def decompose_cam_into_gcam(
+    world_T_cam: Transform3D,
+) -> Tuple[Transform3D, torch.Tensor]:
     """Returns gravity-aligned cam's pose in world and camera frame"""
 
     # gcam: gravity-aligned camera with z=optical axis
