@@ -135,6 +135,12 @@ class MapLocDataset(torchdata.Dataset):
         world_t_cam = self.data["t_c2w"][idx].numpy()
 
         image = read_image(self.image_dirs[scene] / (name + self.image_ext))
+        image = (
+            torch.from_numpy(np.ascontiguousarray(image))
+            .permute(2, 0, 1)
+            .float()
+            .div_(255)
+        )
 
         if self.cfg.force_camera_height is not None:
             data["camera_height"] = torch.tensor(self.cfg.force_camera_height)
@@ -153,18 +159,18 @@ class MapLocDataset(torchdata.Dataset):
         world_T_tile = Transform2D.from_Rt(torch.eye(2), canvas.bbox.min_)
         tile_T_cam = (world_T_tile.inv() @ world_T_cam2d).float()
 
-        image, valid, cam = self.process_image(image, cam, seed, cam_R_gcam)
-
         # Map augmentations
         if self.stage == "train":
             if self.cfg.augmentation.rot90:
                 raster, tile_T_cam = random_rot90(raster, tile_T_cam, canvas.ppm)
             if self.cfg.augmentation.flip:
-                image, valid, raster, tile_T_cam = random_flip(
-                    image, valid, raster, tile_T_cam, canvas.ppm
+                image, raster, tile_T_cam, cam_R_gcam = random_flip(
+                    image, raster, tile_T_cam, cam_R_gcam, canvas.ppm
                 )
         map_T_cam = Transform2D.to_pixels(tile_T_cam, 1 / canvas.ppm)
         # map_T_cam will be deprecated, tile_T_cam is sufficient.
+
+        image, valid, cam = self.process_image(image, cam, seed, cam_R_gcam)
 
         # Spatial to memory layout
         raster = torch.rot90(raster, -1, dims=(-2, -1))
@@ -208,6 +214,7 @@ class MapLocDataset(torchdata.Dataset):
             "camera": cam,
             "canvas": canvas,
             "map": raster,
+            "cam_R_gcam": cam_R_gcam,
             "tile_T_cam": tile_T_cam,
             "map_T_cam": map_T_cam,
             "map_t_init": map_t_init,
@@ -215,12 +222,7 @@ class MapLocDataset(torchdata.Dataset):
         }
 
     def process_image(self, image, cam, seed, cam_R_gcam):
-        image = (
-            torch.from_numpy(np.ascontiguousarray(image))
-            .permute(2, 0, 1)
-            .float()
-            .div_(255)
-        )
+
         assert self.cfg.rectify_pitch
         image, valid = rectify_image(image, cam, cam_R_gcam)
 
