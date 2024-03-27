@@ -11,7 +11,6 @@ Based on PyTorch tensors: differentiable, batched, with GPU support.
 
 import functools
 import inspect
-import math
 from typing import Dict, List, NamedTuple, Tuple, Union
 
 import numpy as np
@@ -108,7 +107,9 @@ class TensorWrapper:
             return NotImplemented
 
 
-class Pose(TensorWrapper):
+class Transform3D(TensorWrapper):
+    """SE(3) transformation with 3-DoF translation and 3-DoF rotation"""
+
     def __init__(self, data: torch.Tensor):
         assert data.shape[-1] == 12
         super().__init__(data)
@@ -155,14 +156,14 @@ class Pose(TensorWrapper):
         """Underlying translation vector with shape (..., 3)."""
         return self._data[..., -3:]
 
-    def inv(self) -> "Pose":
+    def inv(self) -> "Transform3D":
         """Invert an SE(3) pose."""
         R = self.R.transpose(-1, -2)
         t = -(R @ self.t.unsqueeze(-1)).squeeze(-1)
         return self.__class__.from_Rt(R, t)
 
-    def compose(self, other: "Pose") -> "Pose":
-        """Chain two SE(3) poses: T_B2C.compose(T_A2B) -> T_A2C."""
+    def compose(self, other: "Transform3D") -> "Transform3D":
+        """Chain two SE(3) poses: C_T_B.compose(B_T_A) - > C_T_A"""
         R = self.R @ other.R
         t = self.t + (self.R @ other.t.unsqueeze(-1)).squeeze(-1)
         return self.__class__.from_Rt(R, t)
@@ -174,14 +175,13 @@ class Pose(TensorWrapper):
             p3d: 3D points, numpy array or PyTorch tensor with shape (..., 3).
         """
         assert p3d.shape[-1] == 3
-        # assert p3d.shape[:-2] == self.shape  # allow broadcasting
         return p3d @ self.R.transpose(-1, -2) + self.t.unsqueeze(-2)
 
     def __matmul__(
-        self, other: Union["Pose", torch.Tensor]
-    ) -> Union["Pose", torch.Tensor]:
-        """Transform a set of 3D points: T_A2B * p3D_A -> p3D_B.
-        or chain two SE(3) poses: T_B2C @ T_A2B -> T_A2C."""
+        self, other: Union["Transform3D", torch.Tensor]
+    ) -> Union["Transform3D", torch.Tensor]:
+        """Transform a set of 3D points: B_T_A @ p3d_A -> p3D_B
+        or chain two SE(3) poses: C_T_B @ B_T_A -> C_T_A"""
         if isinstance(other, self.__class__):
             return self.compose(other)
         else:
@@ -193,17 +193,155 @@ class Pose(TensorWrapper):
     def magnitude(self) -> Tuple[torch.Tensor]:
         """Magnitude of the SE(3) transformation.
         Returns:
-            dr: rotation anngle in degrees.
+            dr: rotation angle in degrees.
             dt: translation distance in meters.
         """
         trace = torch.diagonal(self.R, dim1=-1, dim2=-2).sum(-1)
         cos = torch.clamp((trace - 1) / 2, -1, 1)
-        dr = torch.acos(cos).abs() / math.pi * 180
+        dr = torch.rad2deg(torch.acos(cos).abs())
         dt = torch.norm(self.t, dim=-1)
         return dr, dt
 
     def __repr__(self):
-        return f"Pose: {self.shape} {self.dtype} {self.device}"
+        return f"Transform3D: {self.shape} {self.dtype} {self.device}"
+
+
+class Transform2D(TensorWrapper):
+    """SE(2) transformation with 2-DoF translation and 1-DoF rotation"""
+
+    def __init__(self, data: torch.Tensor):
+        assert data.shape[-1] == 3  # angle_deg, x, y
+        super().__init__(data)
+
+    @property
+    def angle(self) -> torch.Tensor:
+        """Returns angle in degrees"""
+        return self._data[..., :1]
+
+    @property
+    def t(self) -> torch.Tensor:
+        """Underlying translation vector with shape (..., 2)."""
+        return self._data[..., -2:]
+
+    @classmethod
+    def from_degrees(cls, angle: torch.Tensor, t: torch.Tensor):
+        """SE(2) pose from degrees. Rotation is counter-clockwise from +ve X"""
+        rt_flat = torch.cat([angle, t[..., 0:2]], -1)
+        return cls(rt_flat)
+
+    @classmethod
+    @autocast
+    def from_Rt(cls, R: torch.Tensor, t: torch.Tensor):
+        """Pose from a 2D rotation matrix and 2D translation vector.
+        Accepts numpy arrays or PyTorch tensors.
+
+        Args:
+            R: rotation matrix with shape (..., 2, 2).
+            t: translation vector with shape (..., 2).
+        """
+        assert R.shape[-2:] == (2, 2)
+        assert t.shape[-1] == 2
+        assert R.shape[:-2] == t.shape[:-1]
+        angle_deg = torch.rad2deg(torch.arctan2(R[..., 1, 0], R[..., 0, 0]))
+        return cls.from_degrees(angle_deg[None], t[..., :2])
+
+    @classmethod
+    def camera_2d_from_3d(cls, transform: "Transform3D"):
+        """SE(2) pose from an SE(3) pose.
+        Computes yaw as angle between x-axis and camera's z-axis."""
+        angle_deg = torch.rad2deg(
+            torch.arctan2(transform.R[..., 1, 2][None], transform.R[..., 0, 2][None])
+        )
+        return cls.from_degrees(angle_deg, transform.t[..., :2])
+
+    @classmethod
+    def to_pixels(
+        cls, transform: Union["Transform2D", torch.Tensor], resolution: float
+    ) -> Union["Transform2D", torch.Tensor]:
+        if isinstance(transform, cls):
+            ij = transform.t / resolution - 0.5
+            return cls.from_degrees(transform.angle, ij)
+        else:
+            ij = transform / resolution - 0.5
+            return ij
+
+    @classmethod
+    def from_pixels(
+        cls, transform: Union["Transform2D", torch.Tensor], resolution: float
+    ) -> Union["Transform2D", torch.Tensor]:
+        if isinstance(transform, cls):
+            xy = (transform.t + 0.5) * resolution
+            return cls.from_degrees(transform.angle, xy)
+        else:
+            xy = (transform + 0.5) * resolution
+            return xy
+
+    @classmethod
+    def from_Transform3D(cls, transform: "Transform3D"):
+        """SE(2) pose from an SE(3) pose."""
+        angle_deg = torch.rad2deg(
+            torch.arctan2(transform.R[..., 1, 0][None], transform.R[..., 0, 0][None])
+        )
+        return cls.from_degrees(angle_deg, transform.t[..., :2])
+
+    @property
+    def R(self) -> torch.Tensor:
+        """Underlying rotation matrix with shape (..., 2, 2)."""
+        rad = torch.deg2rad(self.angle)
+        cos = torch.cos(rad)
+        sin = torch.sin(rad)
+        R_flat = torch.cat([cos, -sin, sin, cos], -1)
+        return R_flat.reshape(R_flat.shape[:-1] + (2, 2))
+
+    def inv(self) -> "Transform2D":
+        """Invert an SE(2) pose."""
+        R = self.R.transpose(-1, -2)
+        t = -(R @ self.t.unsqueeze(-1)).squeeze(-1)
+        return self.__class__.from_Rt(R, t)
+
+    def compose(self, other: "Transform2D") -> "Transform2D":
+        """Chain two SE(2) poses: C_T_B.compose(B_T_A) -> C_T_A."""
+        R = self.R @ other.R
+        t = self.t + (self.R @ other.t.unsqueeze(-1)).squeeze(-1)
+        return self.__class__.from_Rt(R, t)
+
+    @autocast
+    def transform(self, p2d: torch.Tensor) -> torch.Tensor:
+        """Transform a set of 2D points.
+        Args:
+            p2d: 2D points, numpy array or PyTorch tensor with shape (..., 2).
+        """
+        assert p2d.shape[-1] == 2
+        # assert p3d.shape[:-2] == self.shape  # allow broadcasting
+        return p2d @ self.R.transpose(-1, -2) + self.t.unsqueeze(-2)
+
+    def __matmul__(
+        self, other: Union["Transform2D", torch.Tensor]
+    ) -> Union["Transform2D", torch.Tensor]:
+        """Transform a set of 2D points: B_T_A * p2D_A -> p2D_B.
+        or chain two SE(2) poses: C_T_B @ B_T_A -> C_T_A."""
+        if isinstance(other, self.__class__):
+            return self.compose(other)
+        else:
+            return self.transform(other)
+
+    def numpy(self) -> Tuple[np.ndarray]:
+        return self.R.numpy(), self.t.numpy()
+
+    def magnitude(self) -> Tuple[torch.Tensor]:
+        """Magnitude of the SE(2) transformation.
+        Returns:
+            dr: rotation angle in degrees.
+            dt: translation distance in meters.
+        """
+        dr = self.angle % 360
+        dr = torch.min(dr, 360 - dr)
+        dt = torch.norm(self.t, dim=-1)
+        return dr, dt
+
+    def __repr__(self):
+        return f"Transform2D: {self.shape} {self.dtype} {self.device}. \
+            angle: {self.angle}. t: {self.t}"
 
 
 class Camera(TensorWrapper):
