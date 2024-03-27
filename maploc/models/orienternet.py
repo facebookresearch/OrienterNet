@@ -185,8 +185,17 @@ class OrienterNet(BaseModel):
         map_T_cam_max = Transform2D.from_degrees(yaw_max, ij_max)
         map_T_cam_avg = Transform2D.from_degrees(yaw_avg, ij_avg)
 
+        tile_T_cam_max = Transform2D.from_pixels(
+            map_T_cam_max, 1 / data["pixels_per_meter"]
+        )
+        tile_T_cam_expectation = Transform2D.from_pixels(
+            map_T_cam_avg, 1 / data["pixels_per_meter"]
+        )
+
         return {
             **pred,
+            "tile_T_cam_max": tile_T_cam_max,
+            "tile_T_cam_expectation": tile_T_cam_expectation,
             "map_T_cam_max": map_T_cam_max,
             "map_T_cam_expectation": map_T_cam_avg,
             "scores": scores,
@@ -221,11 +230,11 @@ class OrienterNet(BaseModel):
 
     def metrics(self):
         return {
-            "xy_max_error": Location2DError("dt_max"),
-            "xy_expectation_error": Location2DError("dt_expectation"),
-            "yaw_max_error": AngleError("dr_max"),
-            "xy_recall_2m": Location2DRecall(2.0, key="dt_max"),
-            "xy_recall_5m": Location2DRecall(5.0, key="dt_max"),
-            "yaw_recall_2°": AngleRecall(2.0, "dr_max"),
-            "yaw_recall_5°": AngleRecall(5.0, "dr_max"),
+            "xy_max_error": Location2DError("tile_T_cam_max"),
+            "xy_expectation_error": Location2DError("tile_T_cam_expectation"),
+            "yaw_max_error": AngleError("tile_T_cam_max"),
+            "xy_recall_2m": Location2DRecall(2.0, key="tile_T_cam_max"),
+            "xy_recall_5m": Location2DRecall(5.0, key="tile_T_cam_max"),
+            "yaw_recall_2°": AngleRecall(2.0, "tile_T_cam_max"),
+            "yaw_recall_5°": AngleRecall(5.0, "tile_T_cam_max"),
         }

@@ -7,8 +7,8 @@ from torchmetrics.utilities.data import dim_zero_cat
 from .utils import deg2rad, rotmat2d
 
 
-def location_error(uv, uv_gt, ppm=1):
-    return torch.norm(uv - uv_gt.to(uv), dim=-1) / ppm
+def location_error(xy, xy_gt):
+    return torch.norm(xy - xy_gt.to(xy), dim=-1)
 
 
 def angle_error(t, t_gt):
@@ -18,34 +18,24 @@ def angle_error(t, t_gt):
 
 
 class Location2DRecall(torchmetrics.MeanMetric):
-    def __init__(
-        self, threshold, pixel_per_meter=None, key="map_T_cam_max", *args, **kwargs
-    ):
+    def __init__(self, threshold, key="tile_T_cam_max", *args, **kwargs):
         self.threshold = threshold
-        self.ppm = pixel_per_meter
         self.key = key
         super().__init__(*args, **kwargs)
 
     def update(self, pred, data):
-        if self.key[:3] == "dt_":
-            error = pred[self.key]
-        else:
-            assert self.ppm is not None
-            error = location_error(pred[self.key], data["map_T_cam"].t, self.ppm)
+        error = location_error(pred[self.key].t, data["tile_T_cam"].t)
         super().update((error <= self.threshold).float())
 
 
 class AngleRecall(torchmetrics.MeanMetric):
-    def __init__(self, threshold, key="map_T_cam_max", *args, **kwargs):
+    def __init__(self, threshold, key="tile_T_cam_max", *args, **kwargs):
         self.threshold = threshold
         self.key = key
         super().__init__(*args, **kwargs)
 
     def update(self, pred, data):
-        if self.key[:3] == "dr_":
-            error = pred[self.key]
-        else:
-            error = angle_error(pred[self.key], data["map_T_cam"].angle)
+        error = angle_error(pred[self.key].angle, data["tile_T_cam"].angle)
         super().update((error <= self.threshold).float())
 
 
@@ -74,26 +64,18 @@ class AngleError(MeanMetricWithRecall):
         self.key = key
 
     def update(self, pred, data):
-        if self.key[:3] == "dr_":
-            value = pred[self.key]
-        else:
-            value = angle_error(pred[self.key], data["map_T_cam"].angle)
+        value = angle_error(pred[self.key].angle, data["tile_T_cam"].angle)
         if value.numel():
             self.value.append(value)
 
 
 class Location2DError(MeanMetricWithRecall):
-    def __init__(self, key, pixel_per_meter=None):
+    def __init__(self, key):
         super().__init__()
         self.key = key
-        self.ppm = pixel_per_meter
 
     def update(self, pred, data):
-        if self.key[:3] == "dt_":
-            value = pred[self.key]
-        else:
-            assert self.ppm is not None
-            value = location_error(pred[self.key], data["map_T_cam"].t, self.ppm)
+        value = location_error(pred[self.key].t, data["tile_T_cam"].t)
         if value.numel():
             self.value.append(value)
 
