@@ -60,8 +60,9 @@ def evaluate_single_image(
 ):
     ppm = model.model.conf.pixel_per_meter
     metrics = MetricCollection(model.model.metrics())
-    metrics["directional_error"] = LateralLongitudinalError(ppm)
+    metrics["directional_error"] = LateralLongitudinalError()
     if has_gps:
+        # TODO: refactor
         metrics["xy_gps_error"] = Location2DError("uv_gps", ppm)
         metrics["xy_fused_error"] = Location2DError("uv_fused", ppm)
         metrics["yaw_fused_error"] = AngleError("yaw_fused")
@@ -78,6 +79,7 @@ def evaluate_single_image(
         pred = model(batch)
 
         if has_gps:
+            # TODO: refactor
             (uv_gps,) = pred["uv_gps"] = batch["uv_gps"]
             pred["log_probs_fused"] = fuse_gps(
                 pred["log_probs"], uv_gps, ppm, sigma=batch["accuracy_gps"]

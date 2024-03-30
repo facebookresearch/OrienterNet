@@ -81,16 +81,15 @@ class Location2DError(MeanMetricWithRecall):
 
 
 class LateralLongitudinalError(MeanMetricWithRecall):
-    def __init__(self, pixel_per_meter, key="uv_max"):
+    def __init__(self, key="tile_T_cam_max"):
         super().__init__()
-        self.ppm = pixel_per_meter
         self.key = key
 
     def update(self, pred, data):
-        yaw = deg2rad(data["roll_pitch_yaw"][..., -1])
-        shift = (pred[self.key] - data["uv"]) * yaw.new_tensor([-1, 1])
+        yaw = deg2rad(90 - data["tile_T_cam"].angle).squeeze(-1)
+        shift = pred[self.key].t - data["tile_T_cam"].t
         shift = (rotmat2d(yaw) @ shift.unsqueeze(-1)).squeeze(-1)
-        error = torch.abs(shift) / self.ppm
+        error = torch.abs(shift)
         value = error.view(-1, 2)
         if value.numel():
             self.value.append(value)
