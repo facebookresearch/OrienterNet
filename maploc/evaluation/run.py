@@ -12,6 +12,8 @@ from pytorch_lightning import seed_everything
 from torchmetrics import MetricCollection
 from tqdm import tqdm
 
+from maploc.utils.wrappers import Transform2D
+
 from .. import EXPERIMENTS_PATH, logger
 from ..data.torch import collate, unbatch_to_device
 from ..models.metrics import AngleError, LateralLongitudinalError, Location2DError
@@ -62,10 +64,9 @@ def evaluate_single_image(
     metrics = MetricCollection(model.model.metrics())
     metrics["directional_error"] = LateralLongitudinalError()
     if has_gps:
-        # TODO: refactor
-        metrics["xy_gps_error"] = Location2DError("uv_gps", ppm)
-        metrics["xy_fused_error"] = Location2DError("uv_fused", ppm)
-        metrics["yaw_fused_error"] = AngleError("yaw_fused")
+        metrics["xy_gps_error"] = Location2DError("tile_T_gps")
+        metrics["xy_fused_error"] = Location2DError("tile_T_fused")
+        metrics["yaw_fused_error"] = AngleError("tile_T_fused")
     metrics = metrics.to(model.device)
 
     for i, batch_ in enumerate(
@@ -79,15 +80,32 @@ def evaluate_single_image(
         pred = model(batch)
 
         if has_gps:
-            # TODO: refactor
-            (uv_gps,) = pred["uv_gps"] = batch["uv_gps"]
+            map_t_gps = pred["map_t_gps"] = batch["map_t_gps"]
             pred["log_probs_fused"] = fuse_gps(
-                pred["log_probs"], uv_gps, ppm, sigma=batch["accuracy_gps"]
-            )
+                pred["log_probs"],
+                map_t_gps,
+                ppm,
+                sigma=batch["accuracy_gps"],
+                gaussian=True,
+                refactored=True,
+            )  # memory_layout
+
+            # argmax_xyr returns the "uv" coordinates on the memory layout
             uvt_fused = argmax_xyr(pred["log_probs_fused"])
-            pred["uv_fused"] = uvt_fused[..., :2]
-            pred["yaw_fused"] = uvt_fused[..., -1]
-            del uv_gps, uvt_fused
+
+            # Note: the rotation dimension (last dim) of log_probs_fused is
+            # still ordered acc. to north-clockwise yaw convention.
+
+            ij_fused = torch.flip(uvt_fused[..., :2], dims=[-1])
+            yaw_fused = 90 - uvt_fused[..., -1]
+            map_T_fused = Transform2D.from_degrees(yaw_fused.unsqueeze(-1), ij_fused)
+            pred["tile_T_fused"] = Transform2D.from_pixels(map_T_fused, 1 / ppm)
+
+            tile_t_gps = Transform2D.from_pixels(map_t_gps, 1 / ppm)
+            pred["tile_T_gps"] = Transform2D.from_degrees(
+                torch.zeros_like(tile_t_gps[:, :1]), tile_t_gps
+            )
+            del ij_fused, uvt_fused, yaw_fused
 
         results = metrics(pred, batch)
         if callback is not None:

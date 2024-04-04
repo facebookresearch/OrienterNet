@@ -259,13 +259,15 @@ def mask_yaw_prior(
     return scores.masked_fill_(~rot_mask[:, None, None], -np.inf)
 
 
-def fuse_gps(log_prob, uv_gps, ppm, sigma=10, gaussian=False):
-    grid = make_grid(*log_prob.shape[-3:-1][::-1]).to(log_prob)
-    dist = torch.sum((grid - uv_gps) ** 2, -1)
+def fuse_gps(log_prob, map_t_gps, ppm, sigma=10, gaussian=False, refactored=False):
+    grid = make_grid(*log_prob.shape[-3:-1][::-1], y_up=refactored).to(log_prob)
+    dist = torch.sum((grid - map_t_gps) ** 2, -1)
     sigma_pixel = sigma * ppm
     if gaussian:
         gps_log_prob = -1 / 2 * dist / sigma_pixel**2
     else:
         gps_log_prob = torch.where(dist < sigma_pixel**2, 1, -np.inf)
+    if refactored:
+        gps_log_prob = torch.rot90(gps_log_prob, -1, dims=(-2, -1))
     log_prob_fused = log_softmax_spatial(log_prob + gps_log_prob.unsqueeze(-1))
     return log_prob_fused

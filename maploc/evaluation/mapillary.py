@@ -107,4 +107,5 @@ if __name__ == "__main__":
         args.sequential,
         output_dir=args.output_dir,
         num=args.num,
+        has_gps=True,
     )
