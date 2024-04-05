@@ -64,7 +64,7 @@ def evaluate_single_image(
     metrics = MetricCollection(model.model.metrics())
     metrics["directional_error"] = LateralLongitudinalError()
     if has_gps:
-        metrics["xy_gps_error"] = Location2DError("tile_T_gps")
+        metrics["xy_gps_error"] = Location2DError("tile_t_gps")
         metrics["xy_fused_error"] = Location2DError("tile_T_fused")
         metrics["yaw_fused_error"] = AngleError("tile_T_fused")
     metrics = metrics.to(model.device)
@@ -101,10 +101,7 @@ def evaluate_single_image(
             map_T_fused = Transform2D.from_degrees(yaw_fused.unsqueeze(-1), ij_fused)
             pred["tile_T_fused"] = Transform2D.from_pixels(map_T_fused, 1 / ppm)
 
-            tile_t_gps = Transform2D.from_pixels(map_t_gps, 1 / ppm)
-            pred["tile_T_gps"] = Transform2D.from_degrees(
-                torch.zeros_like(tile_t_gps[:, :1]), tile_t_gps
-            )
+            pred["tile_t_gps"] = Transform2D.from_pixels(map_t_gps, 1 / ppm)
             del ij_fused, uvt_fused, yaw_fused
 
         results = metrics(pred, batch)

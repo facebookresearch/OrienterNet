@@ -4,6 +4,8 @@ import torch
 import torchmetrics
 from torchmetrics.utilities.data import dim_zero_cat
 
+from maploc.utils.wrappers import Transform2D
+
 from .utils import deg2rad, rotmat2d
 
 
@@ -24,7 +26,13 @@ class Location2DRecall(torchmetrics.MeanMetric):
         super().__init__(*args, **kwargs)
 
     def update(self, pred, data):
-        error = location_error(pred[self.key].t, data["tile_T_cam"].t)
+        if isinstance(pred[self.key], Transform2D):
+            xy_p = pred[self.key].t
+        else:
+            xy_p = pred[self.key]
+        xy_gt = data["tile_T_cam"].t
+        assert xy_gt.shape == xy_p.shape
+        error = location_error(xy_p, xy_gt)
         super().update((error <= self.threshold).float())
 
 
@@ -75,7 +83,14 @@ class Location2DError(MeanMetricWithRecall):
         self.key = key
 
     def update(self, pred, data):
-        value = location_error(pred[self.key].t, data["tile_T_cam"].t)
+        if isinstance(pred[self.key], Transform2D):
+            xy_p = pred[self.key].t
+        else:
+            xy_p = pred[self.key]
+
+        xy_gt = data["tile_T_cam"].t
+        assert xy_gt.shape == xy_p.shape
+        value = location_error(xy_p, xy_gt)
         if value.numel():
             self.value.append(value)
 
