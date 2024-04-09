@@ -6,7 +6,6 @@ from typing import Callable, Optional, Sequence, Union
 import numpy as np
 import torch
 import torchvision.transforms.functional as tvf
-from scipy.spatial.transform import Rotation
 
 from ..utils.geometry import from_homogeneous, to_homogeneous
 from ..utils.wrappers import Camera
@@ -15,8 +14,7 @@ from ..utils.wrappers import Camera
 def rectify_image(
     image: torch.Tensor,
     cam: Camera,
-    roll: float,
-    pitch: Optional[float] = None,
+    cam_R_gcam: Optional[torch.Tensor] = None,
     valid: Optional[torch.Tensor] = None,
 ):
     *_, h, w = image.shape
@@ -26,14 +24,7 @@ def rectify_image(
     )
     grid = torch.stack(grid, -1).to(image.dtype)
 
-    if pitch is not None:
-        args = ("ZX", (roll, pitch))
-    else:
-        args = ("Z", roll)
-    R = Rotation.from_euler(*args, degrees=True).as_matrix()
-    R = torch.from_numpy(R).to(image)
-
-    grid_rect = to_homogeneous(cam.normalize(grid)) @ R.T
+    grid_rect = to_homogeneous(cam.normalize(grid)) @ cam_R_gcam.T.to(image)
     grid_rect = cam.denormalize(from_homogeneous(grid_rect))
     grid_norm = (grid_rect + 0.5) / grid.new_tensor([w, h]) * 2 - 1
     rectified = torch.nn.functional.grid_sample(

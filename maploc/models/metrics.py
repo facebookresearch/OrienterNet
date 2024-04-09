@@ -4,11 +4,13 @@ import torch
 import torchmetrics
 from torchmetrics.utilities.data import dim_zero_cat
 
+from maploc.utils.wrappers import Transform2D
+
 from .utils import deg2rad, rotmat2d
 
 
-def location_error(uv, uv_gt, ppm=1):
-    return torch.norm(uv - uv_gt.to(uv), dim=-1) / ppm
+def location_error(xy, xy_gt):
+    return torch.norm(xy - xy_gt.to(xy), dim=-1)
 
 
 def angle_error(t, t_gt):
@@ -18,25 +20,30 @@ def angle_error(t, t_gt):
 
 
 class Location2DRecall(torchmetrics.MeanMetric):
-    def __init__(self, threshold, pixel_per_meter, key="uv_max", *args, **kwargs):
+    def __init__(self, threshold, key="tile_T_cam_max", *args, **kwargs):
         self.threshold = threshold
-        self.ppm = pixel_per_meter
         self.key = key
         super().__init__(*args, **kwargs)
 
     def update(self, pred, data):
-        error = location_error(pred[self.key], data["uv"], self.ppm)
+        if isinstance(pred[self.key], Transform2D):
+            xy_p = pred[self.key].t
+        else:
+            xy_p = pred[self.key]
+        xy_gt = data["tile_T_cam"].t
+        assert xy_gt.shape == xy_p.shape
+        error = location_error(xy_p, xy_gt)
         super().update((error <= self.threshold).float())
 
 
 class AngleRecall(torchmetrics.MeanMetric):
-    def __init__(self, threshold, key="yaw_max", *args, **kwargs):
+    def __init__(self, threshold, key="tile_T_cam_max", *args, **kwargs):
         self.threshold = threshold
         self.key = key
         super().__init__(*args, **kwargs)
 
     def update(self, pred, data):
-        error = angle_error(pred[self.key], data["roll_pitch_yaw"][..., -1])
+        error = angle_error(pred[self.key].angle, data["tile_T_cam"].angle)
         super().update((error <= self.threshold).float())
 
 
@@ -65,34 +72,39 @@ class AngleError(MeanMetricWithRecall):
         self.key = key
 
     def update(self, pred, data):
-        value = angle_error(pred[self.key], data["roll_pitch_yaw"][..., -1])
+        value = angle_error(pred[self.key].angle, data["tile_T_cam"].angle)
         if value.numel():
             self.value.append(value)
 
 
 class Location2DError(MeanMetricWithRecall):
-    def __init__(self, key, pixel_per_meter):
+    def __init__(self, key):
         super().__init__()
         self.key = key
-        self.ppm = pixel_per_meter
 
     def update(self, pred, data):
-        value = location_error(pred[self.key], data["uv"], self.ppm)
+        if isinstance(pred[self.key], Transform2D):
+            xy_p = pred[self.key].t
+        else:
+            xy_p = pred[self.key]
+
+        xy_gt = data["tile_T_cam"].t
+        assert xy_gt.shape == xy_p.shape
+        value = location_error(xy_p, xy_gt)
         if value.numel():
             self.value.append(value)
 
 
 class LateralLongitudinalError(MeanMetricWithRecall):
-    def __init__(self, pixel_per_meter, key="uv_max"):
+    def __init__(self, key="tile_T_cam_max"):
         super().__init__()
-        self.ppm = pixel_per_meter
         self.key = key
 
     def update(self, pred, data):
-        yaw = deg2rad(data["roll_pitch_yaw"][..., -1])
-        shift = (pred[self.key] - data["uv"]) * yaw.new_tensor([-1, 1])
+        yaw = deg2rad(90 - data["tile_T_cam"].angle).squeeze(-1)
+        shift = pred[self.key].t - data["tile_T_cam"].t
         shift = (rotmat2d(yaw) @ shift.unsqueeze(-1)).squeeze(-1)
-        error = torch.abs(shift) / self.ppm
+        error = torch.abs(shift)
         value = error.view(-1, 2)
         if value.numel():
             self.value.append(value)

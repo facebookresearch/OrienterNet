@@ -10,13 +10,13 @@ import torch.utils.data as torchdata
 import torchvision.transforms as tvf
 from omegaconf import DictConfig, OmegaConf
 
-from ..models.utils import deg2rad, rotmat2d
+from ..models.utils import rotmat2d
 from ..osm.tiling import TileManager
 from ..utils.geo import BoundaryBox
 from ..utils.io import read_image
-from ..utils.wrappers import Camera
+from ..utils.wrappers import Camera, Transform2D, Transform3D
 from .image import pad_image, rectify_image, resize_image
-from .utils import decompose_rotmat, random_flip, random_rot90
+from .utils import compose_rotmat, decompose_cam_into_gcam, random_flip, random_rot90
 
 
 class MapLocDataset(torchdata.Dataset):
@@ -104,8 +104,8 @@ class MapLocDataset(torchdata.Dataset):
 
         if "shifts" in self.data:
             yaw = self.data["roll_pitch_yaw"][idx][-1]
-            R_c2w = rotmat2d((90 - yaw) / 180 * np.pi).float()
-            error = (R_c2w @ self.data["shifts"][idx][:2]).numpy()
+            world_R_cam = rotmat2d(np.deg2rad((90 - yaw))).float()
+            error = (world_R_cam @ self.data["shifts"][idx][:2]).numpy()
         else:
             error = np.random.RandomState(seed).uniform(-1, 1, size=2)
         xy_w_init += error * self.cfg.max_init_error
@@ -126,18 +126,22 @@ class MapLocDataset(torchdata.Dataset):
         cam_dict = self.data["cameras"][scene][seq][self.data["camera_id"][idx]]
         cam = Camera.from_dict(cam_dict).float()
 
+        # for backward compatibility
         if "roll_pitch_yaw" in self.data:
-            roll, pitch, yaw = self.data["roll_pitch_yaw"][idx].numpy()
+            world_R_cam = compose_rotmat(*self.data["roll_pitch_yaw"][idx].numpy())
         else:
-            roll, pitch, yaw = decompose_rotmat(self.data["R_c2w"][idx].numpy())
-        image = read_image(self.image_dirs[scene] / (name + self.image_ext))
+            world_R_cam = self.data["R_c2w"][idx].numpy()
 
-        if "plane_params" in self.data:
-            # transform the plane parameters from world to camera frames
-            plane_w = self.data["plane_params"][idx]
-            data["ground_plane"] = torch.cat(
-                [rotmat2d(deg2rad(torch.tensor(yaw))) @ plane_w[:2], plane_w[2:]]
-            )
+        world_t_cam = self.data["t_c2w"][idx].numpy()
+
+        image = read_image(self.image_dirs[scene] / (name + self.image_ext))
+        image = (
+            torch.from_numpy(np.ascontiguousarray(image))
+            .permute(2, 0, 1)
+            .float()
+            .div_(255)
+        )
+
         if self.cfg.force_camera_height is not None:
             data["camera_height"] = torch.tensor(self.cfg.force_camera_height)
         elif "camera_height" in self.data:
@@ -145,29 +149,40 @@ class MapLocDataset(torchdata.Dataset):
 
         # raster extraction
         canvas = self.tile_managers[scene].query(bbox_tile)
-        xy_w_gt = self.data["t_c2w"][idx][:2].numpy()
-        uv_gt = canvas.to_uv(xy_w_gt)
-        uv_init = canvas.to_uv(bbox_tile.center)
         raster = canvas.raster  # C, H, W
+        raster = torch.from_numpy(np.ascontiguousarray(raster)).long()
+        world_T_cam = Transform3D.from_Rt(world_R_cam, world_t_cam)
+        world_T_cam2d = Transform2D.camera_2d_from_3d(world_T_cam)
+
+        _, cam_R_gcam = decompose_cam_into_gcam(world_T_cam)
+
+        world_T_tile = Transform2D.from_Rt(torch.eye(2), canvas.bbox.min_)
+        tile_T_cam = (world_T_tile.inv() @ world_T_cam2d).float()
 
         # Map augmentations
-        heading = np.deg2rad(90 - yaw)  # fixme
         if self.stage == "train":
             if self.cfg.augmentation.rot90:
-                raster, uv_gt, heading = random_rot90(raster, uv_gt, heading, seed)
+                raster, tile_T_cam = random_rot90(raster, tile_T_cam, canvas.ppm)
             if self.cfg.augmentation.flip:
-                image, raster, uv_gt, heading = random_flip(
-                    image, raster, uv_gt, heading, seed
+                image, raster, tile_T_cam, cam_R_gcam = random_flip(
+                    image, raster, tile_T_cam, cam_R_gcam, canvas.ppm
                 )
-        yaw = 90 - np.rad2deg(heading)  # fixme
+        map_T_cam = Transform2D.to_pixels(tile_T_cam, 1 / canvas.ppm)
+        # map_T_cam will be deprecated, tile_T_cam is sufficient.
 
-        image, valid, cam, roll, pitch = self.process_image(
-            image, cam, roll, pitch, seed
-        )
+        image, valid, cam = self.process_image(image, cam, seed, cam_R_gcam)
+
+        # Spatial to memory layout
+        raster = torch.rot90(raster, -1, dims=(-2, -1))
+
+        world_t_init = torch.from_numpy(bbox_tile.center)
+        tile_t_init = (world_t_init - world_T_tile.t).float()
+        map_t_init = Transform2D.to_pixels(tile_t_init, 1 / canvas.ppm)
 
         # Create the mask for prior location
         if self.cfg.add_map_mask:
-            data["map_mask"] = torch.from_numpy(self.create_map_mask(canvas))
+            map_mask = torch.from_numpy(self.create_map_mask(canvas))
+            data["map_mask"] = torch.rot90(map_mask, -1, dims=(-2, -1))
 
         if self.cfg.max_init_error_rotation is not None:
             if "shifts" in self.data:
@@ -175,14 +190,16 @@ class MapLocDataset(torchdata.Dataset):
             else:
                 error = np.random.RandomState(seed + 1).uniform(-1, 1)
                 error = torch.tensor(error, dtype=torch.float)
-            yaw_init = yaw + error * self.cfg.max_init_error_rotation
+            yaw_init = tile_T_cam.angle + error * self.cfg.max_init_error_rotation
             range_ = self.cfg.prior_range_rotation or self.cfg.max_init_error_rotation
             data["yaw_prior"] = torch.stack([yaw_init, torch.tensor(range_)])
 
         if self.cfg.return_gps:
             gps = self.data["gps_position"][idx][:2].numpy()
-            xy_gps = self.tile_managers[scene].projection.project(gps)
-            data["uv_gps"] = torch.from_numpy(canvas.to_uv(xy_gps)).float()
+            world_t_gps = self.tile_managers[scene].projection.project(gps)
+            world_t_gps = torch.from_numpy(world_t_gps)
+            tile_t_gps = (world_t_gps - world_T_tile.t).float()
+            data["map_t_gps"] = Transform2D.to_pixels(tile_t_gps, 1 / canvas.ppm)
             data["accuracy_gps"] = torch.tensor(
                 min(self.cfg.accuracy_gps, self.cfg.crop_size_meters)
             )
@@ -196,26 +213,18 @@ class MapLocDataset(torchdata.Dataset):
             "valid": valid,
             "camera": cam,
             "canvas": canvas,
-            "map": torch.from_numpy(np.ascontiguousarray(raster)).long(),
-            "uv": torch.from_numpy(uv_gt).float(),  # TODO: maybe rename to uv?
-            "uv_init": torch.from_numpy(uv_init).float(),  # TODO: maybe rename to uv?
-            "roll_pitch_yaw": torch.tensor((roll, pitch, yaw)).float(),
+            "map": raster,
+            "cam_R_gcam": cam_R_gcam,
+            "tile_T_cam": tile_T_cam,
+            "map_T_cam": map_T_cam,
+            "map_t_init": map_t_init,
             "pixels_per_meter": torch.tensor(canvas.ppm).float(),
         }
 
-    def process_image(self, image, cam, roll, pitch, seed):
-        image = (
-            torch.from_numpy(np.ascontiguousarray(image))
-            .permute(2, 0, 1)
-            .float()
-            .div_(255)
-        )
-        image, valid = rectify_image(
-            image, cam, roll, pitch if self.cfg.rectify_pitch else None
-        )
-        roll = 0.0
-        if self.cfg.rectify_pitch:
-            pitch = 0.0
+    def process_image(self, image, cam, seed, cam_R_gcam):
+
+        assert self.cfg.rectify_pitch
+        image, valid = rectify_image(image, cam, cam_R_gcam)
 
         if self.cfg.target_focal_length is not None:
             # resize to a canonical focal length
@@ -251,7 +260,7 @@ class MapLocDataset(torchdata.Dataset):
         with torch.random.fork_rng(devices=[]):
             torch.manual_seed(seed)
             image = self.tfs(image)
-        return image, valid, cam, roll, pitch
+        return image, valid, cam
 
     def create_map_mask(self, canvas):
         map_mask = np.zeros(canvas.raster.shape[-2:], bool)

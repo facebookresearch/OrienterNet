@@ -4,6 +4,8 @@ import numpy as np
 import torch
 from torch.nn.functional import normalize
 
+from maploc.utils.wrappers import Transform2D
+
 from . import get_model
 from .base import BaseModel
 from .bev_net import BEVNet
@@ -114,8 +116,12 @@ class OrienterNet(BaseModel):
         return scores
 
     def _forward(self, data):
+
+        # Revert memory layout back to spatial layout
+        spatial_map = torch.rot90(data["map"], 1, dims=(-2, -1))
+
         pred = {}
-        pred_map = pred["map"] = self.map_encoder(data)
+        pred_map = pred["map"] = self.map_encoder({**data, "map": spatial_map})
         f_map = pred_map["map_features"][0]
 
         # Extract image features.
@@ -149,43 +155,90 @@ class OrienterNet(BaseModel):
             scores = scores + pred_map["log_prior"][0].unsqueeze(-1)
         # pred["scores_unmasked"] = scores.clone()
         if "map_mask" in data:
-            scores.masked_fill_(~data["map_mask"][..., None], -np.inf)
+            # Revert memory layout back to spatial
+            map_mask = torch.rot90(data["map_mask"], 1, dims=(-2, -1))
+            scores.masked_fill_(~map_mask[..., None], -np.inf)
         if "yaw_prior" in data:
             mask_yaw_prior(scores, data["yaw_prior"], self.conf.num_rotations)
+
         log_probs = log_softmax_spatial(scores)
         with torch.no_grad():
             uvr_max = argmax_xyr(scores).to(scores)
             uvr_avg, _ = expectation_xyr(log_probs.exp())
 
+        # Refactor model output
+
+        # note: data["map"]'s memory layout is different from its spatial layout.
+        # For direct comparison before and after refactoring, we reverted the map
+        # (and map_mask) format before passing it through the model above.
+
+        h = data["map"].shape[-2]
+        ij_max = uvr_max[..., :2].clone()
+        ij_avg = uvr_avg[..., :2].clone()
+        ij_max[..., 1] = h - 1 - uvr_max[..., 1]
+        ij_avg[..., 1] = h - 1 - uvr_avg[..., 1]
+
+        # yaw to east-counterclockwise
+        yaw_max = 90 - uvr_max[..., 2][..., None]
+        yaw_avg = 90 - uvr_avg[..., 2][..., None]
+
+        map_T_cam_max = Transform2D.from_degrees(yaw_max, ij_max)
+        map_T_cam_avg = Transform2D.from_degrees(yaw_avg, ij_avg)
+
+        resolution = 1 / data["pixels_per_meter"][..., None]
+        tile_T_cam_max = Transform2D.from_pixels(map_T_cam_max, resolution)
+        tile_T_cam_expectation = Transform2D.from_pixels(map_T_cam_avg, resolution)
+
+        # spatial to memory layout
+        pred["bev"]["output"] = torch.rot90(pred["bev"]["output"], -1, dims=(-2, -1))
+        pred["bev"]["confidence"] = torch.rot90(
+            pred["bev"]["confidence"], -1, dims=(-2, -1)
+        )
+        f_bev = torch.rot90(f_bev, -1, dims=(-2, -1))
+        valid_bev = torch.rot90(valid_bev, -1, dims=(-2, -1))
+        pred["map"]["map_features"] = torch.rot90(
+            torch.stack(pred["map"]["map_features"]), -1, dims=(-2, -1)
+        )
+        if "log_prior" in pred["map"]:
+            pred["map"]["log_prior"] = torch.rot90(
+                torch.stack(pred["map"]["log_prior"]), -1, dims=(-2, -1)
+            )
+        scores = torch.rot90(scores, -1, dims=(-3, -2))
+        log_probs = torch.rot90(log_probs, -1, dims=(-3, -2))
+
         return {
             **pred,
+            "tile_T_cam_max": tile_T_cam_max,
+            "tile_T_cam_expectation": tile_T_cam_expectation,
+            "map_T_cam_max": map_T_cam_max,
+            "map_T_cam_expectation": map_T_cam_avg,
             "scores": scores,
             "log_probs": log_probs,
-            "uvr_max": uvr_max,
-            "uv_max": uvr_max[..., :2],
-            "yaw_max": uvr_max[..., 2],
-            "uvr_expectation": uvr_avg,
-            "uv_expectation": uvr_avg[..., :2],
-            "yaw_expectation": uvr_avg[..., 2],
             "features_image": f_image,
             "features_bev": f_bev,
             "valid_bev": valid_bev.squeeze(1),
         }
 
     def loss(self, pred, data):
-        xy_gt = data["uv"]
-        yaw_gt = data["roll_pitch_yaw"][..., -1]
+
+        # Revert refactored outputs to original
+        ij_gt = data["map_T_cam"].t
+        uv_gt = ij_gt.clone()
+        uv_gt[..., 1] = data["map"].shape[-2] - 1 - ij_gt[..., 1]
+        yaw_gt = 90 - data["map_T_cam"].angle.squeeze(-1)
+        log_probs = torch.rot90(pred["log_probs"], 1, dims=(-3, -2))
+
         if self.conf.do_label_smoothing:
             nll = nll_loss_xyr_smoothed(
-                pred["log_probs"],
-                xy_gt,
+                log_probs,
+                uv_gt,
                 yaw_gt,
                 self.conf.sigma_xy / self.conf.pixel_per_meter,
                 self.conf.sigma_r,
                 mask=data.get("map_mask"),
             )
         else:
-            nll = nll_loss_xyr(pred["log_probs"], xy_gt, yaw_gt)
+            nll = nll_loss_xyr(log_probs, uv_gt, yaw_gt)
         loss = {"total": nll, "nll": nll}
         if self.training and self.conf.add_temperature:
             loss["temperature"] = self.temperature.expand(len(nll))
@@ -193,13 +246,11 @@ class OrienterNet(BaseModel):
 
     def metrics(self):
         return {
-            "xy_max_error": Location2DError("uv_max", self.conf.pixel_per_meter),
-            "xy_expectation_error": Location2DError(
-                "uv_expectation", self.conf.pixel_per_meter
-            ),
-            "yaw_max_error": AngleError("yaw_max"),
-            "xy_recall_2m": Location2DRecall(2.0, self.conf.pixel_per_meter, "uv_max"),
-            "xy_recall_5m": Location2DRecall(5.0, self.conf.pixel_per_meter, "uv_max"),
-            "yaw_recall_2°": AngleRecall(2.0, "yaw_max"),
-            "yaw_recall_5°": AngleRecall(5.0, "yaw_max"),
+            "xy_max_error": Location2DError("tile_T_cam_max"),
+            "xy_expectation_error": Location2DError("tile_T_cam_expectation"),
+            "yaw_max_error": AngleError("tile_T_cam_max"),
+            "xy_recall_2m": Location2DRecall(2.0, key="tile_T_cam_max"),
+            "xy_recall_5m": Location2DRecall(5.0, key="tile_T_cam_max"),
+            "yaw_recall_2°": AngleRecall(2.0, "tile_T_cam_max"),
+            "yaw_recall_5°": AngleRecall(5.0, "tile_T_cam_max"),
         }
