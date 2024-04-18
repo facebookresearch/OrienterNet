@@ -1,9 +1,10 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 
-from typing import Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 import numpy as np
 import torch
+from perspective2d import PerspectiveFields
 
 from . import logger
 from .data.image import pad_image, rectify_image, resize_image
@@ -23,61 +24,51 @@ try:
 except ImportError:
     geolocator = None
 
-try:
-    from gradio_client import Client
 
-    calibrator = Client("https://jinlinyi-perspectivefields.hf.space/")
-except (ImportError, ValueError):
-    calibrator = None
+class ImageCalibrator(PerspectiveFields):
+    def __init__(self, version: str = "Paramnet-360Cities-edina-centered"):
+        super().__init__(version)
+        self.eval()
 
+    def run(
+        self,
+        image_rgb: np.ndarray,
+        focal_length: Optional[float] = None,
+        exif: Optional[EXIF] = None,
+    ) -> Tuple[Tuple[float, float], Camera]:
+        h, w, *_ = image_rgb.shape
+        if focal_length is None and exif is not None:
+            _, focal_ratio = exif.extract_focal()
+            if focal_ratio != 0:
+                focal_length = focal_ratio * max(h, w)
 
-def image_calibration(image_path):
-    logger.info("Calling the PerspectiveFields calibrator, this may take some time.")
-    result = calibrator.predict(
-        image_path, "NEW:Paramnet-360Cities-edina-centered", api_name="/predict"
-    )
-    result = dict(r.rsplit(" ", 1) for r in result[1].split("\n"))
-    roll_pitch = float(result["roll"]), float(result["pitch"])
-    return roll_pitch, float(result["vertical fov"])
+        calib = self.inference(img_bgr=image_rgb[..., ::-1])
+        roll_pitch = (calib["pred_roll"].item(), calib["pred_pitch"].item())
+        if focal_length is None:
+            vfov = calib["pred_vfov"].item()
+            focal_length = h / 2 / np.tan(np.deg2rad(vfov) / 2)
 
-
-def camera_from_exif(exif: EXIF, fov: Optional[float] = None) -> Camera:
-    w, h = image_size = exif.extract_image_size()
-    _, f_ratio = exif.extract_focal()
-    if f_ratio == 0:
-        if fov is not None:
-            # This is the vertical FoV.
-            f = h / 2 / np.tan(np.deg2rad(fov) / 2)
-        else:
-            return None
-    else:
-        f = f_ratio * max(image_size)
-    return Camera.from_dict(
-        dict(
-            model="SIMPLE_PINHOLE",
-            width=w,
-            height=h,
-            params=[f, w / 2 + 0.5, h / 2 + 0.5],
+        camera = Camera.from_dict(
+            {
+                "model": "SIMPLE_PINHOLE",
+                "width": w,
+                "height": h,
+                "params": [focal_length, w / 2 + 0.5, h / 2 + 0.5],
+            }
         )
-    )
+        return roll_pitch, camera
 
 
-def read_input_image(
-    image_path: str,
+def parse_location_prior(
+    exif: EXIF,
     prior_latlon: Optional[Tuple[float, float]] = None,
     prior_address: Optional[str] = None,
-    fov: Optional[float] = None,
-    tile_size_meters: int = 64,
-):
-    image = read_image(image_path)
-    with open(image_path, "rb") as fid:
-        exif = EXIF(fid, lambda: image.shape[:2])
-
+) -> np.ndarray:
     latlon = None
     if prior_latlon is not None:
         latlon = prior_latlon
         logger.info("Using prior latlon %s.", prior_latlon)
-    if prior_address is not None:
+    elif prior_address is not None:
         if geolocator is None:
             raise ValueError("geocoding unavailable, install geopy.")
         location = geolocator.geocode(prior_address)
@@ -93,32 +84,11 @@ def read_input_image(
             latlon = (geo["latitude"], geo["longitude"], alt)
             logger.info("Using prior location from EXIF.")
         else:
-            logger.info("Could not find any prior location in the image EXIF metadata.")
-    if latlon is None:
-        raise ValueError(
-            "No location prior given or found in the image EXIF metadata: "
-            "maybe provide the name of a street, building or neighborhood?"
-        )
-    latlon = np.array(latlon)
-
-    roll_pitch = None
-    if calibrator is not None:
-        roll_pitch, fov = image_calibration(image_path)
-    else:
-        logger.info("Could not call PerspectiveFields, maybe install gradio_client?")
-    if roll_pitch is not None:
-        logger.info("Using (roll, pitch) %s.", roll_pitch)
-
-    camera = camera_from_exif(exif, fov)
-    if camera is None:
-        raise ValueError(
-            "No camera intrinsics found in the EXIF, provide an FoV guess."
-        )
-
-    proj = Projection(*latlon)
-    center = proj.project(latlon)
-    bbox = BoundaryBox(center, center) + tile_size_meters
-    return image, camera, roll_pitch, proj, bbox, latlon
+            raise ValueError(
+                "No location prior given or found in the image EXIF metadata: "
+                "maybe provide the name of a street, building or neighborhood?"
+            )
+    return np.array(latlon)
 
 
 class Demo:
@@ -141,19 +111,41 @@ class Demo:
         model.load_state_dict(state, strict=True)
         if device is None:
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        model = model.to(device)
+        self.model = model.to(device)
 
-        self.model = model
+        self.calibrator = ImageCalibrator().to(device)
+
         self.config = config
         self.device = device
+
+    def read_input_image(
+        self,
+        image_path: str,
+        prior_latlon: Optional[Tuple[float, float]] = None,
+        prior_address: Optional[str] = None,
+        focal_length: Optional[float] = None,
+        tile_size_meters: int = 64,
+    ) -> Tuple[np.ndarray, Camera, Tuple[str, str], Projection, BoundaryBox]:
+        image = read_image(image_path)
+        with open(image_path, "rb") as fid:
+            exif = EXIF(fid, lambda: image.shape[:2])
+
+        gravity, camera = self.calibrator.run(image, focal_length, exif)
+        logger.info("Using (roll, pitch) %s.", gravity)
+
+        latlon = parse_location_prior(exif, prior_latlon, prior_address)
+        proj = Projection(*latlon)
+        center = proj.project(latlon)
+        bbox = BoundaryBox(center, center) + tile_size_meters
+        return image, camera, gravity, proj, bbox
 
     def prepare_data(
         self,
         image: np.ndarray,
         camera: Camera,
         canvas: Canvas,
-        roll_pitch: Optional[Tuple[float]] = None,
-    ):
+        gravity: Optional[Tuple[float]] = None,
+    ) -> Dict[str, torch.Tensor]:
         assert image.shape[:2][::-1] == tuple(camera.size.tolist())
         target_focal_length = self.config.data.resize_image / 2
         factor = target_focal_length / camera.f
@@ -161,8 +153,8 @@ class Demo:
 
         image = torch.from_numpy(image).permute(2, 0, 1).float().div_(255)
         valid = None
-        if roll_pitch is not None:
-            roll, pitch = roll_pitch
+        if gravity is not None:
+            roll, pitch = gravity
             image, valid = rectify_image(
                 image,
                 camera.float(),
@@ -180,12 +172,12 @@ class Demo:
             image, size.tolist(), camera, crop_and_center=True
         )
 
-        return dict(
-            image=image,
-            map=torch.from_numpy(canvas.raster).long(),
-            camera=camera.float(),
-            valid=valid,
-        )
+        return {
+            "image": image,
+            "map": torch.from_numpy(canvas.raster).long(),
+            "camera": camera.float(),
+            "valid": valid,
+        }
 
     def localize(self, image: np.ndarray, camera: Camera, canvas: Canvas, **kwargs):
         data = self.prepare_data(image, camera, canvas, **kwargs)

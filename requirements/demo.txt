@@ -16,5 +16,5 @@ rtree
 scikit-learn
 geopy
 exifread
-gradio_client
 urllib3>=2
+perspective2d @ git+https://github.com/jinlinyi/PerspectiveFields.git
