@@ -9,10 +9,10 @@ import numpy as np
 from tqdm.auto import tqdm
 
 from ... import logger
-from ...osm.tiling import TileManager
+from ...osm.prepare import OSMDataSource, download_and_prepare_osm
 from ...osm.viz import GeoPlotter
 from ...utils.geo import BoundaryBox, Projection
-from ...utils.io import DATA_URL, download_file
+from ...utils.io import download_file
 from .dataset import KittiDataModule
 from .utils import parse_gps_file
 
@@ -20,11 +20,10 @@ split_files = ["test1_files.txt", "test2_files.txt", "train_files.txt"]
 
 
 def prepare_osm(
-    data_dir,
-    osm_path,
-    output_path,
-    tile_margin=512,
+    data_dir: Path,
+    osm_source: OSMDataSource,
     ppm=2,
+    tile_margin=512,
 ):
     all_latlon = []
     for gps_path in data_dir.glob("2011_*/*/oxts/data/*.txt"):
@@ -34,21 +33,26 @@ def prepare_osm(
     all_latlon = np.stack(all_latlon)
     projection = Projection.from_points(all_latlon)
     all_xy = projection.project(all_latlon)
-    bbox_map = BoundaryBox(all_xy.min(0), all_xy.max(0)) + tile_margin
+    bbox_tiling = BoundaryBox(all_xy.min(0), all_xy.max(0)) + tile_margin
+
+    tiles_path = data_dir / KittiDataModule.default_cfg["tiles_filename"]
+    osm_path = data_dir / "karlsruhe.osm"
+    tile_manager = download_and_prepare_osm(
+        osm_source,
+        "kitti",
+        tiles_path,
+        bbox_tiling,
+        projection,
+        osm_path,
+        ppm=ppm,
+    )
 
     plotter = GeoPlotter()
     plotter.points(all_latlon, "red", name="GPS")
-    plotter.bbox(projection.unproject(bbox_map), "blue", "tiling bounding box")
-    plotter.fig.write_html(data_dir / "split_kitti.html")
-
-    tile_manager = TileManager.from_bbox(
-        projection,
-        bbox_map,
-        ppm,
-        path=osm_path,
+    plotter.bbox(
+        projection.unproject(tile_manager.bbox), "black", "tiling bounding box"
     )
-    tile_manager.save(output_path)
-    return tile_manager
+    plotter.fig.write_html(data_dir / "viz_kitti.html")
 
 
 def download(data_dir: Path):
@@ -99,24 +103,13 @@ if __name__ == "__main__":
         "--data_dir", type=Path, default=Path(KittiDataModule.default_cfg["data_dir"])
     )
     parser.add_argument("--pixel_per_meter", type=int, default=2)
-    parser.add_argument("--generate_tiles", action="store_true")
+    parser.add_argument(
+        "--osm_source",
+        default=OSMDataSource.PRECOMPUTED.name,
+        choices=[e.name for e in OSMDataSource],
+    )
     args = parser.parse_args()
 
     args.data_dir.mkdir(exist_ok=True, parents=True)
     download(args.data_dir)
-
-    tiles_path = args.data_dir / KittiDataModule.default_cfg["tiles_filename"]
-    if args.generate_tiles:
-        logger.info("Generating the map tiles.")
-        osm_filename = "karlsruhe.osm"
-        osm_path = args.data_dir / osm_filename
-        if not osm_path.exists():
-            logger.info("Downloading OSM raw data.")
-            download_file(DATA_URL + f"/osm/{osm_filename}", osm_path)
-        if not osm_path.exists():
-            raise FileNotFoundError(f"No OSM data file at {osm_path}.")
-        prepare_osm(args.data_dir, osm_path, tiles_path, ppm=args.pixel_per_meter)
-        (args.data_dir / ".downloaded").touch()
-    else:
-        logger.info("Downloading pre-generated map tiles.")
-        download_file(DATA_URL + "/tiles/kitti.pkl", tiles_path)
+    prepare_osm(args.data_dir, OSMDataSource[args.osm_source], ppm=args.pixel_per_meter)

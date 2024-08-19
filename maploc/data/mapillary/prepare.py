@@ -5,7 +5,6 @@ import asyncio
 import json
 import shutil
 from collections import defaultdict
-from enum import Enum, auto
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence
 
@@ -22,11 +21,10 @@ from tqdm import tqdm
 from tqdm.contrib.concurrent import thread_map
 
 from ... import logger
-from ...osm.download import convert_osm_file, get_geofabrik_url
-from ...osm.tiling import TileManager
+from ...osm.prepare import OSMDataSource, download_and_prepare_osm
 from ...osm.viz import GeoPlotter
 from ...utils.geo import BoundaryBox, Projection
-from ...utils.io import DATA_URL, download_file, write_json
+from ...utils.io import write_json
 from ..utils import decompose_rotmat
 from .config import default_cfg, location_to_params
 from .dataset import MapillaryDataModule
@@ -229,12 +227,6 @@ def process_location(
     shutil.rmtree(raw_image_dir)
 
 
-class OSMDataSource(Enum):
-    PRECOMPUTED = auto()
-    CACHED = auto()
-    LATEST = auto()
-
-
 def prepare_osm(
     location: str,
     output_dir: Path,
@@ -258,38 +250,19 @@ def prepare_osm(
     views_xy = projection.project(views_latlon)
 
     tiles_path = output_dir / MapillaryDataModule.default_cfg["tiles_filename"]
-    if osm_source == OSMDataSource.PRECOMPUtED:
-        logger.info("Downloading pre-computed map tiles.")
-        download_file(DATA_URL + f"/tiles/{location}.pkl", tiles_path)
-        tile_manager = TileManager.load(tiles_path)
-    else:
-        logger.info("Creating the map tiles.")
-        bbox_data = BoundaryBox(views_xy.min(0), views_xy.max(0))
-        bbox_tiling = bbox_data + cfg.tiling.margin
-        osm_filename = osm_filename or f"{location}.osm"
-        osm_path = osm_dir / osm_filename
-        if osm_source == OSMDataSource.CACHED:
-            if not osm_path.exists():
-                logger.info("Downloading OSM raw data.")
-                download_file(DATA_URL + f"/osm/{osm_filename}", osm_path)
-            if not osm_path.exists():
-                raise FileNotFoundError(f"Cannot find OSM data file {osm_path}.")
-        elif osm_source == OSMDataSource.LATEST:
-            bbox_osm = projection.unproject(bbox_data + 2_000)  # 2 km
-            url = get_geofabrik_url(bbox_osm)
-            tmp_path = osm_dir / Path(url).name
-            download_file(url, tmp_path)
-            convert_osm_file(bbox_osm, tmp_path, osm_path)
-        else:
-            raise NotImplementedError("Unknown source {osm_source}.")
-        tile_manager = TileManager.from_bbox(
-            projection,
-            bbox_tiling,
-            cfg.tiling.ppm,
-            tile_size=cfg.tiling.tile_size,
-            path=osm_path,
-        )
-        tile_manager.save(tiles_path)
+    bbox_data = BoundaryBox(views_xy.min(0), views_xy.max(0))
+    bbox_tiling = bbox_data + cfg.tiling.margin
+    osm_path = osm_dir / (osm_filename or f"{location}.osm")
+    tile_manager = download_and_prepare_osm(
+        osm_source,
+        location,
+        tiles_path,
+        bbox_tiling,
+        projection,
+        osm_path,
+        ppm=cfg.tiling.ppm,
+        tile_size=cfg.tiling.tile_size,
+    )
 
     # Visualize the data split
     plotter = GeoPlotter()
