@@ -126,6 +126,12 @@ location_to_params = {
         "filters": {"is_pano": True},
         "osm_file": "paris.osm",
     },
+    # Add any new region/city here:
+    # "location_name": {
+    #     "bbox": BoundaryBox((lat_min, long_min), (lat_max, long_max)),
+    #     "filters": {"is_pano": True},  # or other filers
+    # }
+    # Other fields (bbox_val, osm_file) will be deduced automatically.
 }
 
 default_cfg = OmegaConf.create(

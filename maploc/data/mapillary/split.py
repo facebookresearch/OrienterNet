@@ -145,7 +145,7 @@ def main(args: argparse.Namespace):
             args.token,
             cfg,
             params["bbox"],
-            params["filters"] | {"start_captured_at": args.min_capture_date},
+            {"start_captured_at": args.min_capture_date} | params["filters"],
             None if args.force_auto_val_bbox else params.get("bbox_val"),
         )
         logger.info("Done processing for location %s.", location)
