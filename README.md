@@ -69,14 +69,9 @@ Try our minimal demo - take a picture with your phone in any city and find its e
     <em>OrienterNet positions any image within a large area - try it with your own images!</em>
 </p>
 
-## Evaluation
+## Mapillary Geo-Localization (MGL) dataset
 
-#### Mapillary Geo-Localization dataset
-
-<details>
-<summary>[Click to expand]</summary>
-
-To obtain the dataset:
+To train and evaluate OrienterNet, we introduce a large crowd-sourced dataset of images captured across multiple cities through the [Mapillary platform](https://www.mapillary.com/app/). To obtain the dataset:
 
 1. Create a developper account at [mapillary.com](https://www.mapillary.com/dashboard/developers) and obtain a free access token.
 2. Run the following script to download the data from Mapillary and prepare it:
@@ -85,7 +80,61 @@ To obtain the dataset:
 python -m maploc.data.mapillary.prepare --token $YOUR_ACCESS_TOKEN
 ```
 
-By default the data is written to the directory `./datasets/MGL/`. Then run the evaluation with the pre-trained model:
+By default the data is written to the directory `./datasets/MGL/` and requires about 80 GB of free disk space.
+
+#### Using different OpenStreetMap data
+
+<details>
+<summary>[Click to expand]</summary>
+
+Multiple sources of OpenStreetMap (OSM) data can be selected for the dataset scripts `maploc.data.[mapillary,kitti].prepare` using the `--osm_source` option, which can take the following values:
+- `PRECOMPUTED` (default): download pre-computed raster tiles that are hosted [here](https://cvg-data.inf.ethz.ch/OrienterNet_CVPR2023/tiles/).
+- `CACHED`: compute the raster tiles from raw OSM data downloaded from [Geofabrik](https://download.geofabrik.de/) in November 2021 and hosted [here](https://cvg-data.inf.ethz.ch/OrienterNet_CVPR2023/osm/). This is useful if you wish to use different OSM classes but want to compare the results to the pre-computed tiles.
+- `LATEST`: fetch the latest OSM data from [Geofabrik](https://download.geofabrik.de/). This requires that the [Osmium tool](https://osmcode.org/osmium-tool/) is available in your system, which can be downloaded via `apt-get install osmium-tool` on Ubuntu and `brew install osmium-tool` on macOS.
+
+</details>
+
+#### Extending the dataset
+
+<details>
+<summary>[Click to expand]</summary>
+
+By default, the dataset script fetches data that was queried early 2022 from 12 cities. The dataset can be extended by including additional cities or querying images recently uploaded to Mapillary. To proceed, follow these steps:
+1. For each new location, add an entry to `maploc.data.mapillary.config.location_to_params` following the format:
+```python
+    "location_name": {
+        "bbox": BoundaryBox((lat_min, long_min), (lat_max, long_max)),
+        "filters": {"is_pano": True},
+        # or other filters like creator_username, model, etc.
+        # all described at https://www.mapillary.com/developer/api-documentation#image
+    }
+```
+The bounding box can easily be selected using [this tool](https://boundingbox.klokantech.com/). We recommend searching for cities with a high density of 360 panoramic images on the [Mapillary platform](https://www.mapillary.com/app/).
+
+2. Query the corresponding images and split them into training and valiation subsets with:
+```bash
+python -m maploc.data.mapillary.split --token $YOUR_ACCESS_TOKEN --output_filename splits_MGL_v2_{scene}.json --data_dir datasets/MGL_v2
+```
+3. Fetch and prepare the resulting data:
+```bash
+python -m maploc.data.mapillary.prepare --token $YOUR_ACCESS_TOKEN --split_filename splits_MGL_v2_{scene}.json --data_dir datasets/MGL_v2
+```
+4. To train or evaluate with this new version of the dataset, add the following CLI flags:
+```bash
+python -m maploc.[train,evaluation...] [...] data.data_dir=datasets/MGL_v2 data.split=splits_MGL_v2_{scene}.json
+```
+
+</details>
+
+
+## Evaluation
+
+#### MGL dataset
+
+<details>
+<summary>[Click to expand]</summary>
+
+Download the dataset [as described previously](#mapillary-geo-localization-mgl-dataset) and run the evaluation with the pre-trained model:
 
 ```bash
 python -m maploc.evaluation.mapillary --experiment OrienterNet_MGL model.num_rotations=256
@@ -217,17 +266,6 @@ We provide several visualization notebooks:
 - [Visualize predictions on the MGL dataset](./notebooks/visualize_predictions_mgl.ipynb)
 - [Visualize predictions on the KITTI dataset](./notebooks/visualize_predictions_kitti.ipynb)
 - [Visualize sequential predictions](./notebooks/visualize_predictions_sequences.ipynb)
-
-## OpenStreetMap data
-
-<details>
-<summary>[Click to expand]</summary>
-
-To make sure that the results are consistent over time, we used OSM data downloaded from [Geofabrik](https://download.geofabrik.de/) in November 2021. By default, the dataset scripts `maploc.data.[mapillary,kitti].prepare` download pre-generated raster tiles. If you wish to use different OSM classes, you can pass `--generate_tiles`, which will download and use our prepared raw `.osm` XML files.
-
-You may alternatively download more recent files from [Geofabrik](https://download.geofabrik.de/). Download either compressed XML files as `.osm.bz2` or binary files `.osm.pbf`, which need to be converted to XML files `.osm`, for example using Osmium: ` osmium cat xx.osm.pbf -o xx.osm`.
-
-</details>
 
 ## License
 
