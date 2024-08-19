@@ -5,8 +5,9 @@ import asyncio
 import json
 import shutil
 from collections import defaultdict
+from enum import Enum, auto
 from pathlib import Path
-from typing import List
+from typing import Dict, List, Optional, Sequence
 
 import cv2
 import numpy as np
@@ -21,6 +22,7 @@ from tqdm import tqdm
 from tqdm.contrib.concurrent import thread_map
 
 from ... import logger
+from ...osm.download import convert_osm_file, get_geofabrik_url
 from ...osm.tiling import TileManager
 from ...osm.viz import GeoPlotter
 from ...utils.geo import BoundaryBox, Projection
@@ -174,24 +176,18 @@ def process_sequence(
 
 
 def process_location(
-    location: str,
-    data_dir: Path,
-    split_path: Path,
+    output_dir: Path,
+    bbox: BoundaryBox,
+    splits: Dict[str, Sequence[int]],
     token: str,
     cfg: DictConfig,
-    generate_tiles: bool = False,
 ):
-    params = location_to_params[location]
-    bbox = params["bbox"]
     projection = Projection(*bbox.center)
+    image_ids = [i for split in splits.values() for i in split]
 
-    splits = json.loads(split_path.read_text())
-    image_ids = [i for split in splits.values() for i in split[location]]
-
-    loc_dir = data_dir / location
-    infos_dir = loc_dir / "image_infos"
-    raw_image_dir = loc_dir / "images_raw"
-    out_image_dir = loc_dir / "images"
+    infos_dir = output_dir / "image_infos"
+    raw_image_dir = output_dir / "images_raw"
+    out_image_dir = output_dir / "images"
     for d in (infos_dir, raw_image_dir, out_image_dir):
         d.mkdir(parents=True, exist_ok=True)
 
@@ -228,8 +224,28 @@ def process_location(
                 out_image_dir,
             )
         )
-    write_json(loc_dir / "dump.json", dump)
+    write_json(output_dir / DATA_FILENAME, dump)
 
+    shutil.rmtree(raw_image_dir)
+
+
+class OSMDataSource(Enum):
+    PRECOMPUTED = auto()
+    CACHED = auto()
+    LATEST = auto()
+
+
+def prepare_osm(
+    location: str,
+    output_dir: Path,
+    bbox: BoundaryBox,
+    cfg: DictConfig,
+    osm_dir: Path,
+    osm_source: OSMDataSource,
+    osm_filename: Optional[str] = None,
+):
+    projection = Projection(*bbox.center)
+    dump = json.reads((output_dir / DATA_FILENAME).read_text())
     # Get the view locations
     view_ids = []
     views_latlon = []
@@ -241,18 +257,31 @@ def process_location(
     view_ids = np.array(view_ids)
     views_xy = projection.project(views_latlon)
 
-    tiles_path = loc_dir / MapillaryDataModule.default_cfg["tiles_filename"]
-    if generate_tiles:
+    tiles_path = output_dir / MapillaryDataModule.default_cfg["tiles_filename"]
+    if osm_source == OSMDataSource.PRECOMPUtED:
+        logger.info("Downloading pre-computed map tiles.")
+        download_file(DATA_URL + f"/tiles/{location}.pkl", tiles_path)
+        tile_manager = TileManager.load(tiles_path)
+    else:
         logger.info("Creating the map tiles.")
         bbox_data = BoundaryBox(views_xy.min(0), views_xy.max(0))
         bbox_tiling = bbox_data + cfg.tiling.margin
-        osm_dir = data_dir / "osm"
-        osm_path = osm_dir / params["osm_file"]
-        if not osm_path.exists():
-            logger.info("Downloading OSM raw data.")
-            download_file(DATA_URL + f"/osm/{params['osm_file']}", osm_path)
-        if not osm_path.exists():
-            raise FileNotFoundError(f"Cannot find OSM data file {osm_path}.")
+        osm_filename = osm_filename or f"{location}.osm"
+        osm_path = osm_dir / osm_filename
+        if osm_source == OSMDataSource.CACHED:
+            if not osm_path.exists():
+                logger.info("Downloading OSM raw data.")
+                download_file(DATA_URL + f"/osm/{osm_filename}", osm_path)
+            if not osm_path.exists():
+                raise FileNotFoundError(f"Cannot find OSM data file {osm_path}.")
+        elif osm_source == OSMDataSource.LATEST:
+            bbox_osm = projection.unproject(bbox_data + 2_000)  # 2 km
+            url = get_geofabrik_url(bbox_osm)
+            tmp_path = osm_dir / Path(url).name
+            download_file(url, tmp_path)
+            convert_osm_file(bbox_osm, tmp_path, osm_path)
+        else:
+            raise NotImplementedError("Unknown source {osm_source}.")
         tile_manager = TileManager.from_bbox(
             projection,
             bbox_tiling,
@@ -261,27 +290,60 @@ def process_location(
             path=osm_path,
         )
         tile_manager.save(tiles_path)
-    else:
-        logger.info("Downloading pre-generated map tiles.")
-        download_file(DATA_URL + f"/tiles/{location}.pkl", tiles_path)
-        tile_manager = TileManager.load(tiles_path)
 
     # Visualize the data split
     plotter = GeoPlotter()
-    view_ids_val = set(splits["val"][location])
-    is_val = np.array([int(i.rsplit("_", 1)[0]) in view_ids_val for i in view_ids])
-    plotter.points(views_latlon[~is_val], "red", view_ids[~is_val], "train")
-    plotter.points(views_latlon[is_val], "green", view_ids[is_val], "val")
+    plotter.points(views_latlon, "red", view_ids, "images")
     plotter.bbox(bbox, "blue", "query bounding box")
     plotter.bbox(
         projection.unproject(tile_manager.bbox), "black", "tiling bounding box"
     )
-    geo_viz_path = loc_dir / f"split_{location}.html"
+    geo_viz_path = output_dir / f"viz_data_{location}.html"
     plotter.fig.write_html(geo_viz_path)
-    logger.info("Wrote split visualization to %s.", geo_viz_path)
+    logger.info("Wrote the visualization to %s.", geo_viz_path)
 
-    shutil.rmtree(raw_image_dir)
-    logger.info("Done processing for location %s.", location)
+
+def main(args: argparse.Namespace):
+    args.data_dir.mkdir(exist_ok=True, parents=True)
+
+    split_path = args.data_dir / args.split_filename
+    maybe_git_split = Path(__file__).parent / args.split_filename
+    if maybe_git_split.exists():
+        logger.info("Using official split file at %s.", maybe_git_split)
+        shutil.copy(maybe_git_split, args.data_dir)
+
+    cfg = OmegaConf.merge(default_cfg, OmegaConf.from_cli(args.dotlist))
+    for location in args.locations:
+        logger.info("Starting processing for location %s.", location)
+        if split_path.exists():
+            splits = json.loads(split_path.read_text())
+            splits = {split_name: val[location] for split_name, val in splits.items()}
+        else:
+            split_path_ = Path(str(split_path.format(scene=location)))
+            if not split_path_.exists():
+                raise ValueError(f"Cannot find any split file at path {split_path}.")
+            logger.info("Using per-location split file at %s.", split_path_)
+            splits = json.loads(split_path_.read_text())
+
+        process_location(
+            args.data_dir / location,
+            location_to_params[location]["bbox"],
+            splits,
+            args.token,
+            cfg,
+        )
+
+        logger.info("Preparing OSM data.")
+        prepare_osm(
+            location,
+            args.data_dir / location,
+            location_to_params[location]["bbox"],
+            cfg,
+            args.data_dir / "osm",
+            OSMDataSource[args.osm_source],
+            location_to_params[location].get("osm_file"),
+        )
+        logger.info("Done processing for location %s.", location)
 
 
 if __name__ == "__main__":
@@ -294,21 +356,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--data_dir", type=Path, default=MapillaryDataModule.default_cfg["data_dir"]
     )
-    parser.add_argument("--generate_tiles", action="store_true")
+    parser.add_argument(
+        "--osm_source",
+        default=OSMDataSource.PRECOMPUTED.name,
+        choices=[e.name for e in OSMDataSource],
+    )
     parser.add_argument("dotlist", nargs="*")
-    args = parser.parse_args()
-
-    args.data_dir.mkdir(exist_ok=True, parents=True)
-    shutil.copy(Path(__file__).parent / args.split_filename, args.data_dir)
-    cfg_ = OmegaConf.merge(default_cfg, OmegaConf.from_cli(args.dotlist))
-
-    for location in args.locations:
-        logger.info("Starting processing for location %s.", location)
-        process_location(
-            location,
-            args.data_dir,
-            args.data_dir / args.split_filename,
-            args.token,
-            cfg_,
-            args.generate_tiles,
-        )
+    main(parser.parse_args())
