@@ -48,7 +48,7 @@ DATA_FILENAME = "dump.json"
 
 
 def get_pano_offset(image_info: dict, do_legacy: bool = False) -> float:
-    if do_legacy:
+    if do_legacy and "sfm_cluster" in image_info:
         seed = int(image_info["sfm_cluster"]["id"])
     else:
         seed = image_info["sequence"].__hash__()
@@ -107,7 +107,7 @@ def pack_shot_dict(shot: Shot, info: dict) -> dict:
         capture_time=info["captured_at"],
         gps_position=np.r_[latlong_gps, info["altitude"]],
         compass_angle=info["compass_angle"],
-        chunk_id=int(info["sfm_cluster"]["id"]),
+        chunk_id=int(info["sfm_cluster"]["id"]) if "sfm_cluster" in info else -1,
     )
 
 

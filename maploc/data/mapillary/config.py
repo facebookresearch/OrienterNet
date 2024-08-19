@@ -129,7 +129,9 @@ location_to_params = {
     # Add any new region/city here:
     # "location_name": {
     #     "bbox": BoundaryBox((lat_min, long_min), (lat_max, long_max)),
-    #     "filters": {"is_pano": True},  # or other filers
+    #     "filters": {"is_pano": True},
+    #     # or other filters like creator_username, model, etc.
+    #     # all described at https://www.mapillary.com/developer/api-documentation#image
     # }
     # Other fields (bbox_val, osm_file) will be deduced automatically.
 }
