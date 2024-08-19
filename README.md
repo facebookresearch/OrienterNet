@@ -99,7 +99,7 @@ Multiple sources of OpenStreetMap (OSM) data can be selected for the dataset scr
 <details>
 <summary>[Click to expand]</summary>
 
-By default, the dataset script fetches data that was queried early 2022 from 12 cities. The dataset can be extended by including additional cities or querying images recently uploaded to Mapillary. To proceed, follow these steps:
+By default, the dataset script fetches data that was queried early 2022 from 13 locations. The dataset can be extended by including additional cities or querying images recently uploaded to Mapillary. To proceed, follow these steps:
 1. For each new location, add an entry to `maploc.data.mapillary.config.location_to_params` following the format:
 ```python
     "location_name": {
@@ -115,6 +115,8 @@ The bounding box can easily be selected using [this tool](https://boundingbox.kl
 ```bash
 python -m maploc.data.mapillary.split --token $YOUR_ACCESS_TOKEN --output_filename splits_MGL_v2_{scene}.json --data_dir datasets/MGL_v2
 ```
+Note that, for the 13 default locations, running this script will produce results slightly different from the default split file `splits_MGL_13loc.json` since new images have been uploaded since 2022 and some others have been taken down.
+
 3. Fetch and prepare the resulting data:
 ```bash
 python -m maploc.data.mapillary.prepare --token $YOUR_ACCESS_TOKEN --split_filename splits_MGL_v2_{scene}.json --data_dir datasets/MGL_v2
