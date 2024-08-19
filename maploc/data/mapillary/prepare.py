@@ -196,7 +196,7 @@ def process_location(
 
     logger.info("Fetching metadata for all images.")
     image_infos, num_fail = loop.run_until_complete(
-        fetch_image_infos(image_ids, downloader, infos_dir)
+        fetch_image_infos(image_ids, downloader, dir_=infos_dir)
     )
     logger.info("%d failures (%.1f%%).", num_fail, 100 * num_fail / len(image_ids))
 
@@ -245,7 +245,7 @@ def prepare_osm(
     osm_filename: Optional[str] = None,
 ):
     projection = Projection(*bbox.center)
-    dump = json.reads((output_dir / DATA_FILENAME).read_text())
+    dump = json.loads((output_dir / DATA_FILENAME).read_text())
     # Get the view locations
     view_ids = []
     views_latlon = []
@@ -319,7 +319,7 @@ def main(args: argparse.Namespace):
             splits = json.loads(split_path.read_text())
             splits = {split_name: val[location] for split_name, val in splits.items()}
         else:
-            split_path_ = Path(str(split_path.format(scene=location)))
+            split_path_ = Path(str(split_path).format(scene=location))
             if not split_path_.exists():
                 raise ValueError(f"Cannot find any split file at path {split_path}.")
             logger.info("Using per-location split file at %s.", split_path_)

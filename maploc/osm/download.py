@@ -40,8 +40,13 @@ def get_osm(
 
 def get_geofabrik_index() -> Dict[str, Any]:
     """Fetch the index of all regions served by Geofabrik."""
-    with urllib3.request.urlopen("https://download.geofabrik.de/index-v1.json") as url:
-        return json.load(url)
+    result = urllib3.request(
+        "GET", "https://download.geofabrik.de/index-v1.json", timeout=10
+    )
+    if result.status != 200:
+        error = result.info()["error"]
+        raise ValueError(f"{result.status} {responses[result.status]}: {error}")
+    return json.loads(result.data)
 
 
 def get_geofabrik_url(bbox: BoundaryBox) -> str:
