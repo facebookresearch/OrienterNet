@@ -26,6 +26,7 @@ from ...osm.viz import GeoPlotter
 from ...utils.geo import BoundaryBox, Projection
 from ...utils.io import DATA_URL, download_file, write_json
 from ..utils import decompose_rotmat
+from .config import default_cfg, location_to_params
 from .dataset import MapillaryDataModule
 from .download import (
     MapillaryDownloader,
@@ -43,106 +44,7 @@ from .utils import (
     undistort_shot,
 )
 
-location_to_params = {
-    "sanfrancisco_soma": {
-        "bbox": BoundaryBox(
-            [-122.410307, 37.770364][::-1], [-122.388772, 37.795545][::-1]
-        ),
-        "camera_models": ["GoPro Max"],
-        "osm_file": "sanfrancisco.osm",
-    },
-    "sanfrancisco_hayes": {
-        "bbox": BoundaryBox(
-            [-122.438415, 37.768634][::-1], [-122.410605, 37.783894][::-1]
-        ),
-        "camera_models": ["GoPro Max"],
-        "osm_file": "sanfrancisco.osm",
-    },
-    "amsterdam": {
-        "bbox": BoundaryBox([4.845284, 52.340679][::-1], [4.926147, 52.386299][::-1]),
-        "camera_models": ["GoPro Max"],
-        "osm_file": "amsterdam.osm",
-    },
-    "lemans": {
-        "bbox": BoundaryBox([0.185752, 47.995125][::-1], [0.224088, 48.014209][::-1]),
-        "owners": ["xXOocM1jUB4jaaeukKkmgw"],  # sogefi
-        "osm_file": "lemans.osm",
-    },
-    "berlin": {
-        "bbox": BoundaryBox([13.416271, 52.459656][::-1], [13.469829, 52.499195][::-1]),
-        "owners": ["LT3ajUxH6qsosamrOHIrFw"],  # supaplex030
-        "osm_file": "berlin.osm",
-    },
-    "montrouge": {
-        "bbox": BoundaryBox([2.298958, 48.80874][::-1], [2.332989, 48.825276][::-1]),
-        "owners": [
-            "XtzGKZX2_VIJRoiJ8IWRNQ",
-            "C4ENdWpJdFNf8CvnQd7NrQ",
-            "e_ZBE6mFd7CYNjRSpLl-Lg",
-        ],  # overflorian, phyks, francois2
-        "camera_models": ["LG-R105"],
-        "osm_file": "paris.osm",
-    },
-    "nantes": {
-        "bbox": BoundaryBox([-1.585839, 47.198289][::-1], [-1.51318, 47.236161][::-1]),
-        "owners": [
-            "jGdq3CL-9N-Esvj3mtCWew",
-            "s-j5BH9JRIzsgORgaJF3aA",
-        ],  # c_mobilite, cartocite
-        "osm_file": "nantes.osm",
-    },
-    "toulouse": {
-        "bbox": BoundaryBox([1.429457, 43.591434][::-1], [1.456653, 43.61343][::-1]),
-        "owners": ["MNkhq6MCoPsdQNGTMh3qsQ"],  # tyndare
-        "osm_file": "toulouse.osm",
-    },
-    "vilnius": {
-        "bbox": BoundaryBox([25.258633, 54.672956][::-1], [25.296094, 54.696755][::-1]),
-        "owners": ["bClduFF6Gq16cfwCdhWivw", "u5ukBseATUS8jUbtE43fcO"],  # kedas, vms
-        "osm_file": "vilnius.osm",
-    },
-    "helsinki": {
-        "bbox": BoundaryBox(
-            [24.8975480117, 60.1449128318][::-1], [24.9816543235, 60.1770977471][::-1]
-        ),
-        "camera_types": ["spherical", "equirectangular"],
-        "osm_file": "helsinki.osm",
-    },
-    "milan": {
-        "bbox": BoundaryBox(
-            [9.1732723899, 45.4810977947][::-1],
-            [9.2255987917, 45.5284238563][::-1],
-        ),
-        "camera_types": ["spherical", "equirectangular"],
-        "osm_file": "milan.osm",
-    },
-    "avignon": {
-        "bbox": BoundaryBox(
-            [4.7887045302, 43.9416178156][::-1], [4.8227015622, 43.9584848909][::-1]
-        ),
-        "camera_types": ["spherical", "equirectangular"],
-        "osm_file": "avignon.osm",
-    },
-    "paris": {
-        "bbox": BoundaryBox([2.306823, 48.833827][::-1], [2.39067, 48.889335][::-1]),
-        "camera_types": ["spherical", "equirectangular"],
-        "osm_file": "paris.osm",
-    },
-}
-
-
-default_cfg = OmegaConf.create(
-    {
-        "max_image_size": 512,
-        "do_legacy_pano_offset": True,
-        "min_dist_between_keyframes": 4,
-        "tiling": {
-            "tile_size": 128,
-            "margin": 128,
-            "ppm": 2,
-        },
-    }
-)
+DATA_FILENAME = "dump.json"
 
 
 def get_pano_offset(image_info: dict, do_legacy: bool = False) -> float:
