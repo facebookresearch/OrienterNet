@@ -31,8 +31,9 @@ def download_and_prepare_osm(
     **kwargs,
 ) -> TileManager:
     if source == OSMDataSource.PRECOMPUTED:
-        logger.info("Downloading pre-computed map tiles.")
-        download_file(DATA_URL + f"/tiles/{tiles_name}.pkl", tiles_path)
+        if not tiles_path.exists():
+            logger.info("Downloading pre-computed map tiles.")
+            download_file(DATA_URL + f"/tiles/{tiles_name}.pkl", tiles_path)
         tile_manager = TileManager.load(tiles_path)
         assert tile_manager.ppm == kwargs["ppm"]
         assert tile_manager.bbox.contains(bbox)

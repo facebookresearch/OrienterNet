@@ -236,6 +236,11 @@ def prepare_osm(
     osm_source: OSMDataSource,
     osm_filename: Optional[str] = None,
 ):
+    tiles_path = output_dir / MapillaryDataModule.default_cfg["tiles_filename"]
+    if tiles_path.exists():
+        return
+
+    logger.info("Preparing OSM data.")
     projection = Projection(*bbox.center)
     dump = json.loads((output_dir / DATA_FILENAME).read_text())
     # Get the view locations
@@ -249,7 +254,6 @@ def prepare_osm(
     view_ids = np.array(view_ids)
     views_xy = projection.project(views_latlon)
 
-    tiles_path = output_dir / MapillaryDataModule.default_cfg["tiles_filename"]
     bbox_data = BoundaryBox(views_xy.min(0), views_xy.max(0))
     bbox_tiling = bbox_data + cfg.tiling.margin
     osm_path = osm_dir / (osm_filename or f"{location}.osm")
@@ -306,7 +310,6 @@ def main(args: argparse.Namespace):
             cfg,
         )
 
-        logger.info("Preparing OSM data.")
         prepare_osm(
             location,
             args.data_dir / location,

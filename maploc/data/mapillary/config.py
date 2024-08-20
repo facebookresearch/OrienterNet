@@ -138,7 +138,7 @@ location_to_params = {
 
 default_cfg = OmegaConf.create(
     {
-        "downsampling_resolution_meters": 2,
+        "downsampling_resolution_meters": 3,
         "target_num_val_images": 100,
         "val_train_margin_meters": 25,
         "max_num_train_images": 50_000,

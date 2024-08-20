@@ -7,6 +7,8 @@ import numpy as np
 from omegaconf import DictConfig, OmegaConf
 
 from ... import logger
+from ...osm.parser import Groups
+from ...osm.prepare import OSMDataSource, download_and_prepare_osm
 from ...osm.viz import GeoPlotter
 from ...utils.geo import BoundaryBox, Projection
 from ...utils.io import write_json
@@ -44,18 +46,39 @@ def find_validation_bbox(
 
 
 def process_location(
-    output_path: Path,
+    split_path: Path,
+    output_dir: Path,
+    osm_dir: Path,
+    osm_source: OSMDataSource,
     token: str,
     cfg: DictConfig,
     query_bbox: BoundaryBox,
     filters: Dict[str, Any],
     bbox_val: Optional[BoundaryBox] = None,
+    osm_filename: Optional[str] = None,
 ):
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    downloader = MapillaryDownloader(token)
-    loop = asyncio.get_event_loop()
+    split_path.parent.mkdir(parents=True, exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
     projection = Projection(*query_bbox.center)
     bbox_local = projection.project(query_bbox)
+
+    logger.info("Fetching OpenStreetMap data.")
+    tiles_path = output_dir / MapillaryDataModule.default_cfg["tiles_filename"]
+    bbox_tiling = query_bbox + cfg.tiling.margin
+    osm_path = osm_dir / (osm_filename or f"{output_dir.name}.osm")
+    tile_manager = download_and_prepare_osm(
+        osm_source,
+        output_dir.name,
+        tiles_path,
+        bbox_tiling,
+        projection,
+        osm_path,
+        ppm=cfg.tiling.ppm,
+        tile_size=cfg.tiling.tile_size,
+    )
+
+    downloader = MapillaryDownloader(token)
+    loop = asyncio.get_event_loop()
 
     logger.info("Fetching the list of image with filter: %s", filters)
     image_ids, bboxes = loop.run_until_complete(
@@ -84,6 +107,25 @@ def process_location(
     image_ids = image_ids[valid]
     latlon = latlon[valid]
     xy = xy[valid]
+
+    # discard sequences that intersect with buildings
+    canvas = tile_manager.query(bbox_local)
+    building_mask = canvas.raster[0] == (Groups.areas.index("building") + 1)
+    is_building = building_mask[tuple(np.round(canvas.to_uv(xy)).astype(int).T[::-1])]
+    logger.info(
+        "%d images intersect with buildings (%.1f%%).",
+        is_building.sum(),
+        100 * is_building.mean(),
+    )
+    # plotter = GeoPlotter()
+    # plotter.points(latlon[is_building], "red", name="building")
+    # plotter.points(latlon[~is_building], "green", name="no building")
+    # plotter.bbox(query_bbox, "blue", "query bounding box")
+    # plotter.fig.write_html(f"{split_path}_building_viz.html")
+    # TODO: filter sequences that intersect with buildings by at least 30%.
+    image_ids = image_ids[~is_building]
+    latlon = latlon[~is_building]
+    xy = xy[~is_building]
 
     # downsample the images with a grid
     indices = grid_downsample(xy, bbox_local, cfg.downsampling_resolution_meters)
@@ -116,7 +158,7 @@ def process_location(
         "val": image_ids[indices_val].tolist(),
         "train": image_ids[indices_train].tolist(),
     }
-    write_json(output_path, splits)
+    write_json(split_path, splits)
 
     # Visualize the data split
     plotter = GeoPlotter()
@@ -125,7 +167,7 @@ def process_location(
     plotter.bbox(query_bbox, "blue", "query bounding box")
     plotter.bbox(bbox_val, "green", "validation bounding box")
     plotter.bbox(projection.unproject(bbox_not_train), "black", "margin bounding box")
-    geo_viz_path = f"{output_path}_viz.html"
+    geo_viz_path = f"{split_path}_viz.html"
     plotter.fig.write_html(geo_viz_path)
     logger.info("Wrote split visualization to %s.", geo_viz_path)
 
@@ -142,11 +184,15 @@ def main(args: argparse.Namespace):
         params = location_to_params[location]
         process_location(
             output_path,
+            args.data_dir / location,
+            args.data_dir / "osm",
+            OSMDataSource[args.osm_source],
             args.token,
             cfg,
             params["bbox"],
             {"start_captured_at": args.min_capture_date} | params["filters"],
-            None if args.force_auto_val_bbox else params.get("bbox_val"),
+            bbox_val=None if args.force_auto_val_bbox else params.get("bbox_val"),
+            osm_filename=location_to_params[location].get("osm_file"),
         )
         logger.info("Done processing for location %s.", location)
 
@@ -163,6 +209,11 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--data_dir", type=Path, default=MapillaryDataModule.default_cfg["data_dir"]
+    )
+    parser.add_argument(
+        "--osm_source",
+        default=OSMDataSource.PRECOMPUTED.name,
+        choices=[e.name for e in OSMDataSource],
     )
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--force_auto_val_bbox", action="store_true")
