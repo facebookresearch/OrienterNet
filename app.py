@@ -1,3 +1,6 @@
+import csv
+import sys
+
 import gradio as gr
 import matplotlib.pyplot as plt
 
@@ -10,6 +13,9 @@ from maploc.utils.viz_localization import (
     likelihood_overlay,
     plot_dense_rotations,
 )
+
+# Avoid `_csv.Error: field larger than field limit` with large plots.
+csv.field_size_limit(sys.maxsize)
 
 
 def run(image, address, tile_size_meters, num_rotations):
