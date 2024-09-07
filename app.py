@@ -17,6 +17,9 @@ from maploc.utils.viz_localization import (
 # Avoid `_csv.Error: field larger than field limit` with large plots.
 csv.field_size_limit(sys.maxsize)
 
+# Fixes https://github.com/gradio-app/gradio/issues/9287
+gr.utils.sanitize_value_for_csv = lambda v: v
+
 
 def run(image, address, tile_size_meters, num_rotations):
     image_path = image.name
