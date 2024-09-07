@@ -67,7 +67,8 @@ def run(image, address, tile_size_meters, num_rotations):
     plot.points(latlon, "black", name="argmax", size=10, visible="legendonly")
     plot.bbox(bbox_latlon, "blue", name="map tile")
 
-    coordinates = f"(latitude, longitude) = {tuple(latlon)}\nheading angle = {yaw:.2f}°"
+    coordinates = f"(latitude, longitude) = {tuple(map(float, latlon))}"
+    coordinates += f"\nheading angle = {yaw:.2f}°"
     return fig1, fig2, plot.fig, coordinates
 
 
