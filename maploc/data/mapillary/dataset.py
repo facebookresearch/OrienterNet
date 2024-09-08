@@ -253,18 +253,28 @@ class MapillaryDataModule(pl.LightningDataModule):
                 "val": [n for n in names if n[0] in scenes_val],
             }
         elif isinstance(split_arg, str):
-            with (self.root / split_arg).open("r") as fp:
-                splits = json.load(fp)
+            if (self.root / split_arg).exists():
+                # Common split file.
+                with (self.root / split_arg).open("r") as fp:
+                    splits = json.load(fp)
+            else:
+                # Per-scene split file.
+                splits = defaultdict(dict)
+                for scene in self.cfg.scenes:
+                    with (self.root / split_arg.format(scene=scene)).open("r") as fp:
+                        scene_splits = json.load(fp)
+                    for split_name in scene_splits:
+                        splits[split_name][scene] = scene_splits[split_name]
             splits = {
-                k: {loc: set(ids) for loc, ids in split.items()}
-                for k, split in splits.items()
+                split_name: {scene: set(ids) for scene, ids in split.items()}
+                for split_name, split in splits.items()
             }
             self.splits = {}
-            for k, split in splits.items():
-                self.splits[k] = [
-                    n
-                    for n in names
-                    if n[0] in split and int(n[-1].rsplit("_", 1)[0]) in split[n[0]]
+            for split_name, split in splits.items():
+                self.splits[split_name] = [
+                    (scene, *arg, name)
+                    for scene, *arg, name in names
+                    if scene in split and int(name.rsplit("_", 1)[0]) in split[scene]
                 ]
         else:
             raise ValueError(split_arg)
