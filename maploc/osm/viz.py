@@ -85,24 +85,24 @@ class GeoPlotter:
 
 
 map_colors = {
+    "building_outline": (0, 0, 255),
     "building": (84, 155, 255),
-    "parking": (255, 229, 145),
-    "playground": (150, 133, 125),
-    "grass": (188, 255, 143),
-    "park": (0, 158, 16),
-    "forest": (0, 92, 9),
-    "water": (184, 213, 255),
+    "busway": (255, 128, 0),
+    "cycleway": (0, 251, 255),
     "fence": (238, 0, 255),
-    "wall": (0, 0, 0),
+    "forest": (0, 92, 9),
+    "grass": (188, 255, 143),
     "hedge": (107, 68, 48),
     "kerb": (255, 234, 0),
-    "building_outline": (0, 0, 255),
-    "cycleway": (0, 251, 255),
+    "park": (0, 158, 16),
+    "parking": (255, 229, 145),
     "path": (8, 237, 0),
+    "playground": (150, 133, 125),
     "road": (255, 0, 0),
     "tree_row": (0, 92, 9),
-    "busway": (255, 128, 0),
     "void": [int(255 * 0.9)] * 3,
+    "wall": (0, 0, 0),
+    "water": (184, 213, 255),
 }
 
 

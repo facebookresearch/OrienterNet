@@ -11,7 +11,7 @@ from PIL import Image
 
 from ..utils.geo import BoundaryBox, Projection
 from .data import MapData
-from .download import get_osm
+from .download import earth_to_geodataframe, get_osm, vector_tiles_to_geodataframe
 from .parser import Groups
 from .raster import Canvas, render_raster_map, render_raster_masks
 from .reader import OSMData, OSMNode, OSMWay
@@ -92,17 +92,38 @@ class TileManager:
         ppm: int,
         path: Optional[Path] = None,
         tile_size: int = 128,
+        source: str = "osm",
     ):
-        bbox_osm = projection.unproject(bbox)
-        if path is not None and path.is_file():
-            osm = OSMData.from_file(path)
-            if osm.box is not None:
-                assert osm.box.contains(bbox_osm)
-        else:
-            osm = OSMData.from_dict(get_osm(bbox_osm, path))
 
-        osm.add_xy_to_nodes(projection)
-        map_data = MapData.from_osm(osm)
+        assert source in {"osm", "vector-tiles", "earth"}
+
+        bbox_degrees = projection.unproject(bbox)
+
+        if source == "osm":
+            if path is not None and path.is_file():
+                osm = OSMData.from_file(path)
+            #            if osm.box is not None:
+            #                assert osm.box.contains(bbox_osm)
+            else:
+                osm = OSMData.from_dict(get_osm(bbox_degrees, path))
+
+            osm.add_xy_to_nodes(projection)
+            map_data = MapData.from_osm(osm)
+
+        elif source == "vector-tiles":
+            # Create OrienterNet Map Data from Vector Tiles and a GeoDataFrame
+            map_data = MapData.from_geodataframe(
+                gdf=vector_tiles_to_geodataframe(bbox=bbox_degrees),
+                projection=projection,
+            )
+
+        elif source == "earth":
+            # Create OrienterNet Map Data from earth table
+            map_data = MapData.from_geodataframe(
+                gdf=earth_to_geodataframe(bbox=bbox_degrees),
+                projection=projection,
+            )
+
         map_index = MapIndex(map_data)
 
         bounds_x, bounds_y = [

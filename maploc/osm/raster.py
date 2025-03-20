@@ -4,7 +4,7 @@ from typing import Dict, List
 
 import cv2
 import numpy as np
-import torch
+#import torch
 
 from ..utils.geo import BoundaryBox
 from .data import MapArea, MapLine, MapNode
@@ -23,20 +23,20 @@ class Canvas:
         self.raster = np.zeros((self.h, self.w), np.uint8)
 
     def to_uv(self, xy: np.ndarray):
-        xy = self.bbox.normalize(xy)
-        xy[..., 1] = 1 - xy[..., 1]
-        s = self.scaling
-        if isinstance(xy, torch.Tensor):
-            s = torch.from_numpy(s).to(xy)
-        return xy * s - 0.5
+       xy = self.bbox.normalize(xy)
+       xy[..., 1] = 1 - xy[..., 1]
+       s = self.scaling
+#       if isinstance(xy, torch.Tensor):
+#            s = torch.from_numpy(s).to(xy)
+       return xy * s - 0.5
 
     def to_xy(self, uv: np.ndarray):
-        s = self.scaling
-        if isinstance(uv, torch.Tensor):
-            s = torch.from_numpy(s).to(uv)
-        xy = (uv + 0.5) / s
-        xy[..., 1] = 1 - xy[..., 1]
-        return self.bbox.unnormalize(xy)
+       s = self.scaling
+#       if isinstance(uv, torch.Tensor):
+#            s = torch.from_numpy(s).to(uv)
+       xy = (uv + 0.5) / s
+       xy[..., 1] = 1 - xy[..., 1]
+       return self.bbox.unnormalize(xy)
 
     def draw_polygon(self, xy: np.ndarray):
         uv = self.to_uv(xy)

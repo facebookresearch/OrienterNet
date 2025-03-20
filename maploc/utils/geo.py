@@ -3,7 +3,8 @@
 from typing import Union
 
 import numpy as np
-import torch
+
+# import torch
 
 from .geo_opensfm import TopocentricConverter
 
@@ -44,16 +45,16 @@ class BoundaryBox:
 
     def normalize(self, xy):
         min_, max_ = self.min_, self.max_
-        if isinstance(xy, torch.Tensor):
-            min_ = torch.from_numpy(min_).to(xy)
-            max_ = torch.from_numpy(max_).to(xy)
+#       if isinstance(xy, torch.Tensor):
+#           min_ = torch.from_numpy(min_).to(xy)
+#           max_ = torch.from_numpy(max_).to(xy)
         return (xy - min_) / (max_ - min_)
 
     def unnormalize(self, xy):
         min_, max_ = self.min_, self.max_
-        if isinstance(xy, torch.Tensor):
-            min_ = torch.from_numpy(min_).to(xy)
-            max_ = torch.from_numpy(max_).to(xy)
+#        if isinstance(xy, torch.Tensor):
+#            min_ = torch.from_numpy(min_).to(xy)
+#            max_ = torch.from_numpy(max_).to(xy)
         return xy * (max_ - min_) + min_
 
     def format(self) -> str:
