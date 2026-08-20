@@ -156,8 +156,8 @@ class MapLocDataset(torchdata.Dataset):
             if self.cfg.augmentation.rot90:
                 raster, uv_gt, heading = random_rot90(raster, uv_gt, heading, seed)
             if self.cfg.augmentation.flip:
-                image, raster, uv_gt, heading = random_flip(
-                    image, raster, uv_gt, heading, seed
+                image, raster, uv_gt, heading, roll = random_flip(
+                    image, raster, uv_gt, heading, roll, seed
                 )
         yaw = 90 - np.rad2deg(heading)  # fixme
 
