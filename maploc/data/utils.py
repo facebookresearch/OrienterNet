@@ -32,10 +32,10 @@ def random_rot90(raster, xy, heading, seed=None):
     return raster, xy2, heading
 
 
-def random_flip(image, raster, xy, heading, seed=None):
+def random_flip(image, raster, xy, heading, roll, seed=None):
     state = np.random.RandomState(seed)
     if state.rand() > 0.5:  # no flip
-        return image, raster, xy, heading
+        return image, raster, xy, heading, roll
     image = image[:, ::-1]
     h, w = raster.shape[-2:]
     if state.rand() > 0.5:  # flip x
@@ -47,7 +47,9 @@ def random_flip(image, raster, xy, heading, seed=None):
         xy = np.array([xy[0], h - 1 - xy[1]])
         heading = -heading
     heading = heading % (2 * np.pi)
-    return image, raster, xy, heading
+    # Mirroring the image horizontally negates the roll angle of the camera.
+    roll = -roll
+    return image, raster, xy, heading, roll
 
 
 def decompose_rotmat(R_c2w):
